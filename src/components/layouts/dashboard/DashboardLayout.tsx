@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, Moon, Sun, Loader2 } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { HorizontalNav } from "@/components/HorizontalNav";
