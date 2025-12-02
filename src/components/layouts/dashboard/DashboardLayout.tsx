@@ -1,17 +1,27 @@
-import { LogOut } from "lucide-react";
-import { HorizontalNav } from "./HorizontalNav";
-import { Button } from "./ui/button";
-import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
-import ZigmaLogo from "../images/logo.png";
+import { useEffect, useState } from "react";
+import { LogOut, Moon, Sun, Loader2 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+import { HorizontalNav } from "@/components/HorizontalNav";
+import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/ui/PageLoader";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useToast } from "@/hooks/use-toast";
+import ZigmaLogo from "@/images/logo.png";
+import type { DashboardLayoutProps } from "@/types/roles";
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const { theme, toggleTheme } = useTheme();
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  useEffect(() => {
+    setIsNavigating(true);
+    const timer = window.setTimeout(() => setIsNavigating(false), 450);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname]);
 
   const handleSignOut = () => {
     try {
@@ -62,6 +72,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* NAVIGATION */}
             <HorizontalNav />
 
+            {/* THEME TOGGLE */}
+            <button
+              onClick={toggleTheme}
+              className="rounded-md border border-gray-200 bg-white p-2 text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+              aria-label="Toggle color theme"
+            >
+              {theme === "light" ? (
+                <Moon className="h-4 w-4" />
+              ) : (
+                <Sun className="h-4 w-4" />
+              )}
+            </button>
+
             {/* LOGOUT BUTTON */}
             <Button
               variant="outline"
@@ -82,9 +105,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </header>
 
+      {/* {isNavigating && (
+        <div className="pointer-events-none fixed left-1/2 top-20 z-30 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg dark:border-gray-700 dark:bg-gray-900/90 dark:text-gray-200">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            Navigating...
+          </div>
+        </div>
+      )} */}
+
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 overflow-auto">
-        {children}
+      <main className="flex-1 overflow-auto p-4">
+        {isNavigating ? (
+          <PageLoader fullHeight message="Loading dashboard..." />
+        ) : (
+          children
+        )}
       </main>
     </div>
   );

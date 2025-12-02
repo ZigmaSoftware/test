@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import Auth from "@/pages/dashboard/pages/Auth";
+import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/dashboard/pages/Dashboard";
 import MapView from "@/pages/dashboard/pages/MapView";
 import Vehicle from "@/pages/dashboard/pages/Vehicle";
@@ -16,30 +16,39 @@ import NotFound from "@/pages/dashboard/pages/NotFound";
 import { HomeDashboard } from "@/pages/dashboard/pages/Dashboard/HomeDashboard";
 import AdminHome from "@/pages/admin/AdminHome";
 
-import { DashboardLayout } from "@/components/DashboardLayout";
+import { AdminLayout } from "@/components/layouts/admin/AdminLayout";
+import { RoleBasedLayout } from "@/components/layouts/shared/RoleBasedLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import type { UserRole } from "@/types/roles";
+import { ADMIN_ROLE, USER_ROLE_STORAGE_KEY } from "@/types/roles";
 
 function withDashboard(children: ReactNode) {
   return (
     <ProtectedRoute>
       <DashboardRouteGuard>
-        <DashboardLayout>{children}</DashboardLayout>
+        <RoleBasedLayout>{children}</RoleBasedLayout>
       </DashboardRouteGuard>
     </ProtectedRoute>
   );
 }
 
 function withAdmin(children: ReactNode) {
-  return <ProtectedRoute allowedRoles={["admin"]}>{children}</ProtectedRoute>;
+  return (
+    <ProtectedRoute allowedRoles={[ADMIN_ROLE]}>
+      <AdminLayout>{children}</AdminLayout>
+    </ProtectedRoute>
+  );
 }
 
 function DashboardRouteGuard({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     try {
-      setRole(localStorage.getItem("user_role"));
+      setRole(
+        (localStorage.getItem(USER_ROLE_STORAGE_KEY) as UserRole | null) ?? null,
+      );
     } finally {
       setChecked(true);
     }
@@ -49,7 +58,7 @@ function DashboardRouteGuard({ children }: { children: ReactNode }) {
     return null;
   }
 
-  if (role === "admin") {
+  if (role === ADMIN_ROLE) {
     return <Navigate to="/admin" replace />;
   }
 
