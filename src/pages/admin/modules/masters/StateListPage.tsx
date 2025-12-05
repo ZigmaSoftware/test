@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {desktopApi} from "@/api";
 import Swal from "sweetalert2";
 
 import { DataTable } from "primereact/datatable";
@@ -16,17 +15,64 @@ import "primeicons/primeicons.css";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { encryptSegment } from "@/utils/routeCrypto";
 import { Switch } from "@/components/ui/switch";
+import { adminApi } from "@/helpers/admin";
 
-type State = {
-  id: number;
+type StateRecord = {
+  unique_id: string;
   name: string;
   country_name: string;
   label: string;
   is_active: boolean;
 };
 
+type ErrorWithResponse = {
+  response?: {
+    data?: unknown;
+  };
+};
+
+const extractErrorMessage = (error: unknown) => {
+  if (!error) {
+    return "Something went wrong while processing the request.";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  const withResponse = error as ErrorWithResponse;
+  const data = withResponse.response?.data;
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.join(", ");
+  }
+
+  if (data && typeof data === "object") {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `${key}: ${value.join(", ")}`;
+        }
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong while processing the request.";
+};
+
+const stateApi = adminApi.states;
+
 export default function StateList() {
-  const [states, setStates] = useState<State[]>([]);
+  const [states, setStates] = useState<StateRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [globalFilterValue, setGlobalFilterValue] = useState("");
@@ -40,25 +86,31 @@ export default function StateList() {
   const encStates = encryptSegment("states");
 
   const ENC_NEW_PATH = `/${encMasters}/${encStates}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
-    `/${encMasters}/${encStates}/${id}/edit`;
+  const ENC_EDIT_PATH = (unique_id: string) =>
+    `/${encMasters}/${encStates}/${unique_id}/edit`;
 
-  const fetchStates = async () => {
+  const fetchStates = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await desktopApi.get("states/");
-      setStates(res.data);
-    } catch (err) {
-      console.error("Failed loading states:", err);
+      const data = (await stateApi.list()) as StateRecord[];
+      setStates(data);
+    } catch (error) {
+      console.error("Failed loading states:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Unable to load states",
+        text: extractErrorMessage(error),
+      });
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchStates();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  useEffect(() => {
+    void fetchStates();
+  }, [fetchStates]);
+
+  const handleDelete = async (unique_id: string) => {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This state will be permanently deleted!",
@@ -69,16 +121,27 @@ export default function StateList() {
       confirmButtonText: "Yes, delete it!",
     });
 
-    if (!confirm.isConfirmed) return;
+    if (!confirm.isConfirmed) {
+      return;
+    }
 
-    await desktopApi.delete(`states/${id}/`);
-    Swal.fire({
-      icon: "success",
-      title: "Deleted successfully!",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-    fetchStates();
+    try {
+      await stateApi.remove(unique_id);
+      Swal.fire({
+        icon: "success",
+        title: "Deleted successfully!",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      void fetchStates();
+    } catch (error) {
+      console.error("Failed deleting state:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: extractErrorMessage(error),
+      });
+    }
   };
 
   const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,13 +172,18 @@ export default function StateList() {
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
   // ⚡ Toggle handler (PATCH only)
-  const statusTemplate = (row: State) => {
+  const statusTemplate = (row: StateRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await desktopApi.put(`states/${row.id}/`, { is_active: value });
-        fetchStates();
-      } catch (err) {
-        console.error("Status update failed:", err);
+        await stateApi.update(row.unique_id, { is_active: value });
+        void fetchStates();
+      } catch (error) {
+        console.error("Status update failed:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Failed to update status",
+          text: extractErrorMessage(error),
+        });
       }
     };
 
@@ -124,11 +192,11 @@ export default function StateList() {
     );
   };
 
-  const actionTemplate = (row: State) => (
+  const actionTemplate = (row: StateRecord) => (
     <div className="flex gap-3 justify-center">
       <button
         title="Edit"
-        onClick={() => navigate(ENC_EDIT_PATH(row.id))}
+        onClick={() => navigate(ENC_EDIT_PATH(row.unique_id))}
         className="text-blue-600 hover:text-blue-800"
       >
         <PencilIcon className="size-5" />
@@ -136,7 +204,7 @@ export default function StateList() {
 
       <button
         title="Delete"
-        onClick={() => handleDelete(row.id)}
+        onClick={() => handleDelete(row.unique_id)}
         className="text-red-600 hover:text-red-800"
       >
         <TrashBinIcon className="size-5" />
@@ -144,7 +212,7 @@ export default function StateList() {
     </div>
   );
 
-  const indexTemplate = (_: State, { rowIndex }: any) => rowIndex + 1;
+  const indexTemplate = (_: StateRecord, { rowIndex }: any) => rowIndex + 1;
 
   return (
     <div className="p-3">
@@ -181,7 +249,7 @@ export default function StateList() {
           <Column
             field="country_name"
             header="Country"
-            body={(row: State) => cap(row.country_name)}
+            body={(row: StateRecord) => cap(row.country_name)}
             sortable
             style={{ minWidth: "150px" }}
           />
@@ -189,7 +257,7 @@ export default function StateList() {
           <Column
             field="name"
             header="State"
-            body={(row: State) => cap(row.name)}
+            body={(row: StateRecord) => cap(row.name)}
             sortable
             style={{ minWidth: "150px" }}
           />
@@ -197,7 +265,7 @@ export default function StateList() {
           <Column
             field="label"
             header="Label"
-            body={(row: State) => row.label.toUpperCase()}
+            body={(row: StateRecord) => row.label.toUpperCase()}
             sortable
             style={{ minWidth: "150px" }}
           />
