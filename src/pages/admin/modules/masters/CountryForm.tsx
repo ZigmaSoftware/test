@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
-import { desktopApi } from "@/api";
 import ComponentCard from "@/components/common/ComponentCard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,93 +13,177 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { encryptSegment } from "@/utils/routeCrypto";
+import { adminApi } from "@/helpers/admin";
 
 const encMasters = encryptSegment("masters");
 const encCountries = encryptSegment("countries");
 
 const ENC_LIST_PATH = `/${encMasters}/${encCountries}`;
 
+type ContinentRecord = {
+  unique_id: string | number;
+  name: string;
+  is_active: boolean;
+};
+
+type CountryRecord = {
+  name: string;
+  mob_code: string;
+  currency: string;
+  continent_id?: string | number | null;
+  continent?: string | number | null;
+  is_active: boolean;
+};
+
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
+type ErrorWithResponse = {
+  response?: {
+    data?: unknown;
+  };
+};
+
+const continentApi = adminApi.continents;
+const countryApi = adminApi.countries;
+
+const normalizeNullableId = (
+  value: string | number | null | undefined
+): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return String(value);
+};
+
+const extractErrorMessage = (error: unknown) => {
+  if (!error) return "Something went wrong while processing the request.";
+  if (typeof error === "string") return error;
+
+  const withResponse = error as ErrorWithResponse;
+  const data = withResponse.response?.data;
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.join(", ");
+  }
+
+  if (data && typeof data === "object") {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `${key}: ${value.join(", ")}`;
+        }
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong while processing the request.";
+};
+
 function CountryForm() {
   const [name, setName] = useState("");
-  const [mob_code, setMobcode] = useState("");
+  const [mobCode, setMobCode] = useState("");
   const [currency, setCurrency] = useState("");
-  const [continentId, setContinentId] = useState(""); // selected continent
-  const [continents, setContinents] = useState<
-    { value: string; label: string }[]
-  >([]);
+  const [continentId, setContinentId] = useState("");
+  const [continents, setContinents] = useState<SelectOption[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
 
-  //  Load continent list from backend
   useEffect(() => {
-    desktopApi
-      .get("continents/")
-      .then((res) => {
-        const activeContinents = res.data
-          .filter((c: any) => c.is_active)
-          .map((c: any) => ({
-            value: c.unique_id,
-            label: `${c.name}`,
+    const fetchContinents = async () => {
+      try {
+        const data = (await continentApi.list()) as ContinentRecord[];
+        const active = data
+          .filter((continent) => continent.is_active)
+          .map<SelectOption>((continent) => ({
+            value: String(continent.unique_id),
+            label: continent.name,
           }));
-        console.log(activeContinents);
-        setContinents(activeContinents);
-      })
-      .catch((err) => console.error("Error fetching continents:", err));
+
+        setContinents(active);
+      } catch (error) {
+        console.error("Error fetching continents:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Failed to load continents",
+          text: extractErrorMessage(error),
+        });
+      }
+    };
+
+    void fetchContinents();
   }, []);
 
-  // Load existing country for editing
   useEffect(() => {
-    if (isEdit && continents.length > 0) {
-      desktopApi
-        .get(`countries/${id}/`)
-        .then((res) => {
-          setName(res.data.name);
-          setIsActive(res.data.is_active);
-          setMobcode(res.data.mob_code);
-          setCurrency(res.data.currency);
-          setContinentId(res.data.continent_id || "");
-        })
-        .catch((err) => {
-          console.error("Error fetching country:", err);
-          Swal.fire({
-            icon: "error",
-            title: "Failed to load country",
-            text: err.response?.data?.detail || "Something went wrong!",
-          });
-        });
+    if (!isEdit || !id) {
+      return;
     }
-  }, [id, isEdit, continents]);
 
-  //  Submit handler
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const fetchCountry = async () => {
+      try {
+        const data = (await countryApi.get(id)) as CountryRecord;
 
-    //  Basic validation BEFORE enabling loading or API call
-    if (!name || !continentId) {
+        setName(data.name ?? "");
+        setIsActive(Boolean(data.is_active));
+        setMobCode(data.mob_code ?? "");
+        setCurrency(data.currency ?? "");
+
+        const resolvedContinentId = normalizeNullableId(
+          data.continent_id ?? data.continent
+        );
+        setContinentId(resolvedContinentId ?? "");
+      } catch (error) {
+        console.error("Error fetching country:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Failed to load country",
+          text: extractErrorMessage(error),
+        });
+      }
+    };
+
+    void fetchCountry();
+  }, [id, isEdit]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!name.trim() || !continentId) {
       Swal.fire({
         icon: "warning",
         title: "Missing Fields",
         text: "Please fill all the required fields before submitting.",
         confirmButtonColor: "#3085d6",
       });
-      return; // Stop here if validation fails
+      return;
     }
     setLoading(true);
 
     try {
       const payload = {
-        name,
-        continent: continentId, // sending continent foreign key
+        name: name.trim(),
+        continent_id: continentId,
         is_active: isActive,
-        mob_code: mob_code,
-        currency: currency,
+        mob_code: mobCode.trim(),
+        currency: currency.trim(),
       };
 
-      if (isEdit) {
-        await desktopApi.put(`countries/${id}/`, payload);
+      if (isEdit && id) {
+        await countryApi.update(id, payload);
         Swal.fire({
           icon: "success",
           title: "Updated successfully!",
@@ -108,7 +191,7 @@ function CountryForm() {
           showConfirmButton: false,
         });
       } else {
-        await desktopApi.post("countries/", payload);
+        await countryApi.create(payload);
         Swal.fire({
           icon: "success",
           title: "Added successfully!",
@@ -118,23 +201,12 @@ function CountryForm() {
       }
 
       navigate(ENC_LIST_PATH);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to save:", error);
-      const data = error.response?.data;
-      let message = "Something went wrong while saving.";
-
-      if (typeof data === "object" && data !== null) {
-        message = Object.entries(data)
-          .map(([key, val]) => `${key}: ${(val as string[]).join(", ")}`)
-          .join("\n");
-      } else if (typeof data === "string") {
-        message = data;
-      }
-
       Swal.fire({
         icon: "error",
         title: "Save failed",
-        text: message,
+        text: extractErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -190,8 +262,8 @@ function CountryForm() {
             <Input
               id="mobile_code"
               type="number"
-              value={mob_code}
-              onChange={(e) => setMobcode(e.target.value)}
+              value={mobCode}
+              onChange={(e) => setMobCode(e.target.value)}
               placeholder="Enter mobile code"
               className="input-validate w-full"
               required

@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {desktopApi} from "@/api";
 import Swal from "sweetalert2";
 
 import { DataTable } from "primereact/datatable";
@@ -15,10 +14,11 @@ import "primeicons/primeicons.css";
 
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { encryptSegment } from "@/utils/routeCrypto";
-import { Switch } from "@/components/ui/switch"; // ✅ TOGGLE IMPORT
+import { Switch } from "@/components/ui/switch"; // 
+import { adminApi } from "@/helpers/admin";
 
-type Country = {
-  id: number;
+type CountryRecord = {
+  unique_id: string;
   name: string;
   continent_name: string;
   mob_code: string;
@@ -26,8 +26,54 @@ type Country = {
   is_active: boolean;
 };
 
+type ErrorWithResponse = {
+  response?: {
+    data?: unknown;
+  };
+};
+
+const extractErrorMessage = (error: unknown) => {
+  if (!error) {
+    return "Something went wrong while processing the request.";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  const withResponse = error as ErrorWithResponse;
+  const data = withResponse.response?.data;
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.join(", ");
+  }
+
+  if (data && typeof data === "object") {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `${key}: ${value.join(", ")}`;
+        }
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong while processing the request.";
+};
+
+const countryApi = adminApi.countries;
+
 export default function CountryList() {
-  const [countries, setCountries] = useState<Country[]>([]);
+  const [countries, setCountries] = useState<CountryRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [globalFilterValue, setGlobalFilterValue] = useState("");
@@ -41,25 +87,33 @@ export default function CountryList() {
   const encCountries = encryptSegment("countries");
 
   const ENC_NEW_PATH = `/${encMasters}/${encCountries}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
-    `/${encMasters}/${encCountries}/${id}/edit`;
+  const ENC_EDIT_PATH = (unique_id: string) =>
+    `/${encMasters}/${encCountries}/${unique_id}/edit`;
 
-  // Fetch Data
-  const fetchCountries = async () => {
+
+  const fetchCountries = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await desktopApi.get("countries/");
-      setCountries(res.data);
+      const data = (await countryApi.list()) as CountryRecord[];
+      setCountries(data);
+    } catch (error) {
+      console.error("Failed loading countries:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Unable to load countries",
+        text: extractErrorMessage(error),
+      });
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCountries();
   }, []);
 
+  useEffect(() => {
+    void fetchCountries();
+  }, [fetchCountries]);
+
   // Delete Record
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (unique_id: string) => {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This country will be permanently deleted!",
@@ -70,17 +124,27 @@ export default function CountryList() {
       confirmButtonText: "Yes, delete it!",
     });
 
-    if (!confirm.isConfirmed) return;
+    if (!confirm.isConfirmed) {
+      return;
+    }
 
-    await desktopApi.delete(`countries/${id}/`);
-    Swal.fire({
-      icon: "success",
-      title: "Deleted successfully!",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-
-    fetchCountries();
+    try {
+      await countryApi.remove(unique_id);
+      Swal.fire({
+        icon: "success",
+        title: "Deleted successfully!",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      void fetchCountries();
+    } catch (error) {
+      console.error("Failed deleting country:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: extractErrorMessage(error),
+      });
+    }
   };
 
   // Search Bar
@@ -113,13 +177,18 @@ export default function CountryList() {
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
   // 🔥 Toggle logic (PATCH only)
-  const statusTemplate = (row: Country) => {
+  const statusTemplate = (row: CountryRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await desktopApi.put(`countries/${row.id}/`, { is_active: value });
-        fetchCountries();
-      } catch (err) {
-        console.error("Status update failed:", err);
+        await countryApi.update(row.unique_id, { is_active: value });
+        void fetchCountries();
+      } catch (error) {
+        console.error("Status update failed:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Failed to update status",
+          text: extractErrorMessage(error),
+        });
       }
     };
 
@@ -127,11 +196,11 @@ export default function CountryList() {
   };
 
   // Actions
-  const actionTemplate = (c: Country) => (
+  const actionTemplate = (c: CountryRecord) => (
     <div className="flex gap-3 justify-center">
       <button
         title="Edit"
-        onClick={() => navigate(ENC_EDIT_PATH(c.id))}
+        onClick={() => navigate(ENC_EDIT_PATH(c.unique_id))}
         className="text-blue-600 hover:text-blue-800"
       >
         <PencilIcon className="size-5" />
@@ -139,7 +208,7 @@ export default function CountryList() {
 
       <button
         title="Delete"
-        onClick={() => handleDelete(c.id)}
+        onClick={() => handleDelete(c.unique_id)}
         className="text-red-600 hover:text-red-800"
       >
         <TrashBinIcon className="size-5" />
@@ -148,7 +217,7 @@ export default function CountryList() {
   );
 
   // S.No
-  const indexTemplate = (_: Country, { rowIndex }: any) => rowIndex + 1;
+  const indexTemplate = (_: CountryRecord, { rowIndex }: any) => rowIndex + 1;
 
   return (
     <div className="p-3">
@@ -192,7 +261,7 @@ export default function CountryList() {
             field="continent_name"
             header="Continent"
             sortable
-            body={(row: Country) => cap(row.continent_name)}
+            body={(row: CountryRecord) => cap(row.continent_name)}
             style={{ minWidth: "150px" }}
           />
 
@@ -200,7 +269,7 @@ export default function CountryList() {
             field="name"
             header="Country"
             sortable
-            body={(row: Country) => cap(row.name)}
+            body={(row: CountryRecord) => cap(row.name)}
             style={{ minWidth: "150px" }}
           />
 
@@ -218,7 +287,6 @@ export default function CountryList() {
             style={{ minWidth: "130px" }}
           />
 
-          {/* 🔥 Toggle */}
           <Column
             header="Status"
             body={statusTemplate}
@@ -230,6 +298,7 @@ export default function CountryList() {
             body={actionTemplate}
             style={{ width: "150px", textAlign: "center" }}
           />
+
         </DataTable>
       </div>
     </div>
