@@ -14,17 +14,20 @@ export default function UserTypeForm() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { unique_id } = useParams();
-  const isEdit = Boolean(unique_id);
+  const { id } = useParams();
+  const userTypeId = id;
+  const isEdit = Boolean(userTypeId);
 
   useEffect(() => {
     if (isEdit) {
       desktopApi
-        .get(`user-type/${unique_id}/`)
+        .get(`user-type/${userTypeId}/`)
         .then((res) => {
           setName(res.data.name);
           setIsActive(res.data.is_active);
+              
         })
+      
         .catch(() =>
           Swal.fire({
             icon: "error",
@@ -33,7 +36,7 @@ export default function UserTypeForm() {
           })
         );
     }
-  }, [unique_id, isEdit]);
+  }, [userTypeId, isEdit]);
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -46,7 +49,7 @@ export default function UserTypeForm() {
 
     try {
       if (isEdit) {
-        await desktopApi.put(`user-type/${unique_id}/`, payload);
+        await desktopApi.put(`user-type/${userTypeId}/`, payload);
         Swal.fire({
           icon: "success",
           title: "Updated successfully!",

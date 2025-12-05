@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import { ChevronDown, LayoutGrid, MoreHorizontal, List, File, PieChart, UserCircle, Trash2 } from "lucide-react";
+import { ChevronDown, LayoutGrid, MoreHorizontal, List, File, PieChart, UserCircle, Trash2, Truck } from "lucide-react";
 
 import { useSidebar } from "../../../contexts/SideBarContext";
 import { getEncryptedRoute } from "@/utils/routeCache";
