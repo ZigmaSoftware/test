@@ -16,11 +16,6 @@ import {
 import { adminApi } from "@/helpers/admin";
 import { encryptSegment } from "@/utils/routeCrypto";
 
-type Continent = {
-  id: number;
-  name: string;
-  is_active: boolean;
-};
 
 const encMasters = encryptSegment("masters");
 const encContinents = encryptSegment("continents");

@@ -15,7 +15,7 @@ import "primeicons/primeicons.css";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { getEncryptedRoute } from "@/utils/routeCache";
 
-import { Switch } from "@/components/ui/switch"; // 🔥 Toggle
+import { Switch } from "@/components/ui/switch"; // Toggle
 import { adminApi } from "@/helpers/admin";
 
 const vehicleTypeApi = adminApi.vehicleTypes;

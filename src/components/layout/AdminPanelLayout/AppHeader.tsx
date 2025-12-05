@@ -49,7 +49,7 @@ const AppHeader: React.FC = () => {
   return (
     <header className="sticky top-0 z-[60] w-full backdrop-blur-xl">
       <div
-        className="relative border-b"
+        className="relative border-b h-[80px]"
         style={{
           background: headerBackground,
           borderColor: headerBorder,
