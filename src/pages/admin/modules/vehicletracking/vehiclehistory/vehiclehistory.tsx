@@ -29,7 +29,8 @@ const TRACKING_API_URL =
   "https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM";
 
 const HISTORY_API_BASE =
-  import.meta.env.VITE_VEHICLE_HISTORY_API ?? "/vamosys/getVehicleHistory";
+  import.meta.env.VITE_VEHICLE_HISTORY_API ??
+  "https://api.vamosys.com/mobile/getVehicleHistory";
 
 const HISTORY_DEFAULT_PARAMS = {
   userId: "BLUEPLANET",
@@ -237,6 +238,10 @@ export default function VehicleHistory(): JSX.Element {
       });
 
       const res = await fetch(`${HISTORY_API_BASE}?${params.toString()}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Upstream ${res.status}: ${text.slice(0, 200)}`);
+      }
       const json = await res.json();
 
       const source = json.vehicleLocations || json.data || json.track || [];
@@ -256,7 +261,8 @@ export default function VehicleHistory(): JSX.Element {
       if (!pts.length) {
         setHistoryError("No history available in this range.");
       }
-    } catch {
+    } catch (err: any) {
+      console.error("Vehicle history fetch failed:", err);
       setHistoryError("Unable to load vehicle history.");
     }
   }, [vehicleId, fromDate, toDate]);
@@ -357,36 +363,24 @@ export default function VehicleHistory(): JSX.Element {
         </button>
 
         {/* SPEED BUTTONS — 2x / 4x / 8x */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="vh-speed-group">
           <button
             onClick={() => setPlaybackSpeed(2)}
-            style={{
-              background: playbackSpeed === 2 ? "#059669" : "#1d4ed8",
-              padding: "8px 12px",
-              borderRadius: "12px",
-            }}
+            className={`vh-speed-btn ${playbackSpeed === 2 ? "active" : ""}`}
           >
             2x
           </button>
 
           <button
             onClick={() => setPlaybackSpeed(4)}
-            style={{
-              background: playbackSpeed === 4 ? "#059669" : "#1d4ed8",
-              padding: "8px 12px",
-              borderRadius: "12px",
-            }}
+            className={`vh-speed-btn ${playbackSpeed === 4 ? "active" : ""}`}
           >
             4x
           </button>
 
           <button
             onClick={() => setPlaybackSpeed(8)}
-            style={{
-              background: playbackSpeed === 8 ? "#059669" : "#1d4ed8",
-              padding: "8px 12px",
-              borderRadius: "12px",
-            }}
+            className={`vh-speed-btn ${playbackSpeed === 8 ? "active" : ""}`}
           >
             8x
           </button>

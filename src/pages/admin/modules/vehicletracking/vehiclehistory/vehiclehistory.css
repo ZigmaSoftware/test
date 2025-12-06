@@ -84,22 +84,25 @@
 /* Go Button */
 .vh-go-btn {
   padding: 12px 22px;
-  background:  #22c55e;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   border: none;
   border-radius: 10px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.2px;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.15s ease;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+  box-shadow: 0 8px 18px rgba(1, 62, 126, 0.25);
 }
 
 .vh-go-btn:hover {
-  background: #1e3a8a;
+  opacity: 0.9;
   transform: translateY(-1px);
 }
 
 .vh-go-btn:active {
   transform: translateY(0);
+  opacity: 0.85;
 }
 
 /* ---------------------------------------- */
@@ -183,6 +186,38 @@
 .vh-playback input[type="range"] {
   flex: 1;
   accent-color: #1d4ed8;
+}
+
+.vh-speed-group {
+  display: flex;
+  gap: 8px;
+}
+
+.vh-speed-btn {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  color: #fff;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
+  box-shadow: 0 6px 14px rgba(1, 62, 126, 0.25);
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+
+.vh-speed-btn.active {
+  background: linear-gradient(90deg, #0f5bd8, #0b63f6);
+  box-shadow: 0 8px 18px rgba(15, 91, 216, 0.35);
+}
+
+.vh-speed-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.vh-speed-btn:active {
+  transform: translateY(0);
+  opacity: 0.85;
 }
 
 /* ---------------------------------------- */
