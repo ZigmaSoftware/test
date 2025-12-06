@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {desktopApi} from "@/api";
+import { desktopApi } from "@/api";
 import Swal from "sweetalert2";
 
 import { DataTable } from "primereact/datatable";
@@ -15,10 +15,11 @@ import "primeicons/primeicons.css";
 
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { encryptSegment } from "@/utils/routeCrypto";
-import { Switch } from "@/components/ui/switch";   // 🔥 Toggle component
+import { Switch } from "@/components/ui/switch";   // Toggle component
+import { adminApi } from "@/helpers/admin";
 
-type Ward = {
-  id: number;
+type WardRecord = {
+  unique_id: string;
   name: string;
   is_active: boolean;
   zone_name: string;
@@ -28,8 +29,54 @@ type Ward = {
   country_name: string;
 };
 
+type ErrorWithResponse = {
+  response?: {
+    data?: unknown;
+  };
+};
+
+const extractErrorMessage = (error: unknown) => {
+  if (!error) {
+    return "Something went wrong while processing the request.";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  const withResponse = error as ErrorWithResponse;
+  const data = withResponse.response?.data;
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.join(", ");
+  }
+
+  if (data && typeof data === "object") {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `${key}: ${value.join(", ")}`;
+        }
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong while processing the request.";
+};
+
+const wardApi = adminApi.wards;
+
 export default function WardList() {
-  const [wards, setWards] = useState<Ward[]>([]);
+  const [wards, setWards] = useState<WardRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [globalFilterValue, setGlobalFilterValue] = useState("");
@@ -44,23 +91,36 @@ export default function WardList() {
   const encWards = encryptSegment("wards");
 
   const ENC_NEW_PATH = `/${encMasters}/${encWards}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
+  const ENC_EDIT_PATH = (id: string) =>
     `/${encMasters}/${encWards}/${id}/edit`;
 
-  const fetchWards = async () => {
+  // ===========================
+  //   Load Data
+  // ===========================
+
+
+  const fetchWards = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await desktopApi.get("wards/");
-      setWards(res.data);
+      const data = (await wardApi.list()) as WardRecord[];
+      setWards(data);
+    } catch (error) {
+      console.error("Failed loading wards:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Unable to load wards",
+        text: extractErrorMessage(error),
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchWards();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This ward will be permanently deleted!",
@@ -73,7 +133,7 @@ export default function WardList() {
 
     if (!confirm.isConfirmed) return;
 
-    await desktopApi.delete(`wards/${id}/`);
+    await wardApi.remove(id);
     Swal.fire({
       icon: "success",
       title: "Deleted successfully!",
@@ -113,11 +173,11 @@ export default function WardList() {
   const cap = (str?: string) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
-  // 🔥 Toggle Status (PATCH)
-  const statusTemplate = (row: Ward) => {
+  // Toggle Status (PATCH)
+  const statusTemplate = (row: WardRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await desktopApi.put(`wards/${row.id}/`, { is_active: value });
+        await desktopApi.put(`wards/${row.unique_id}/`, { is_active: value });
         fetchWards();
       } catch (err) {
         console.error("Status update failed:", err);
@@ -132,11 +192,11 @@ export default function WardList() {
     );
   };
 
-  const actionTemplate = (row: Ward) => (
+  const actionTemplate = (row: WardRecord) => (
     <div className="flex gap-3 justify-center">
       <button
         title="Edit"
-        onClick={() => navigate(ENC_EDIT_PATH(row.id))}
+        onClick={() => navigate(ENC_EDIT_PATH(row.unique_id))}
         className="text-blue-600 hover:text-blue-800"
       >
         <PencilIcon className="size-5" />
@@ -144,7 +204,7 @@ export default function WardList() {
 
       <button
         title="Delete"
-        onClick={() => handleDelete(row.id)}
+        onClick={() => handleDelete(row.unique_id)}
         className="text-red-600 hover:text-red-800"
       >
         <TrashBinIcon className="size-5" />
@@ -152,7 +212,7 @@ export default function WardList() {
     </div>
   );
 
-  const indexTemplate = (_: Ward, { rowIndex }: { rowIndex: number }) =>
+  const indexTemplate = (_: WardRecord, { rowIndex }: { rowIndex: number }) =>
     rowIndex + 1;
 
   return (
@@ -201,21 +261,21 @@ export default function WardList() {
             field="zone_name"
             header="Zone"
             sortable
-            body={(row: Ward) => cap(row.zone_name)}
+            body={(row: WardRecord) => cap(row.zone_name)}
           />
 
           <Column
             field="city_name"
             header="City"
             sortable
-            body={(row: Ward) => cap(row.city_name)}
+            body={(row: WardRecord) => cap(row.city_name)}
           />
 
           <Column
             field="name"
             header="Ward"
             sortable
-            body={(row: Ward) => cap(row.name)}
+            body={(row: WardRecord) => cap(row.name)}
           />
 
           {/* 🔥 ***TOGGLE REPLACED TAG*** */}
