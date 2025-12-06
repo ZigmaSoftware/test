@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
-import {desktopApi}from "@/api";
+import { desktopApi } from "@/api";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { getEncryptedRoute } from "@/utils/routeCache";
 
@@ -53,17 +53,18 @@ export default function UserScreenList() {
   const { encAdmins, encUserScreen } = getEncryptedRoute();
 
   const ENC_NEW_PATH = `/${encAdmins}/${encUserScreen}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
-    `/${encAdmins}/${encUserScreen}/${id}/edit`;
+
+  // FIXED: now uses unique_id
+  const ENC_EDIT_PATH = (uid: string) =>
+    `/${encAdmins}/${encUserScreen}/${uid}/edit`;
 
   /* -----------------------------------------
-     Load data
+     Load data (UI unchanged)
   ----------------------------------------- */
   const fetchScreens = async () => {
     try {
       const res = await desktopApi.get("userscreens/");
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
-
       setScreens(data.filter((s: UserScreen) => !s.is_delete));
     } catch (error) {
       Swal.fire("Error", "Failed to load screens.", "error");
@@ -77,9 +78,9 @@ export default function UserScreenList() {
   }, [location.state?.refreshed]);
 
   /* -----------------------------------------
-     Delete screen
+     Delete FIXED (uses unique_id now)
   ----------------------------------------- */
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (uid: string) => {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This will delete the screen!",
@@ -90,8 +91,8 @@ export default function UserScreenList() {
     if (!confirm.isConfirmed) return;
 
     try {
-      await desktopApi.delete(`userscreens/${id}/`);
-      setScreens((prev) => prev.filter((s) => s.id !== id));
+      await desktopApi.delete(`userscreens/${uid}/`);
+      setScreens((prev) => prev.filter((s) => s.unique_id !== uid));
       Swal.fire("Deleted!", "Screen deleted successfully", "success");
     } catch {
       Swal.fire("Error", "Delete failed.", "error");
@@ -99,7 +100,7 @@ export default function UserScreenList() {
   };
 
   /* -----------------------------------------
-     Search Filter
+     Search Filter (UI unchanged)
   ----------------------------------------- */
   const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -110,12 +111,12 @@ export default function UserScreenList() {
   };
 
   /* -----------------------------------------
-     TOGGLE STATUS (NEW)
+     Status Toggle FIXED
   ----------------------------------------- */
   const statusTemplate = (row: UserScreen) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await desktopApi.put(`userscreens/${row.id}/`, { is_active: value });
+        await desktopApi.patch(`userscreens/${row.unique_id}/`, { is_active: value });
         fetchScreens();
       } catch (err) {
         console.error("Status update failed:", err);
@@ -123,22 +124,19 @@ export default function UserScreenList() {
     };
 
     return (
-      <Switch
-        checked={row.is_active}
-        onCheckedChange={updateStatus}
-      />
+      <Switch checked={row.is_active} onCheckedChange={updateStatus} />
     );
   };
 
   /* -----------------------------------------
-     Actions (Edit / Delete)
+     Actions FIXED (uses unique_id)
   ----------------------------------------- */
   const actionTemplate = (row: UserScreen) => (
     <div className="flex gap-2 justify-center">
       <button
         title="Edit"
         className="text-blue-600 hover:text-blue-800"
-        onClick={() => navigate(ENC_EDIT_PATH(row.id))}
+        onClick={() => navigate(ENC_EDIT_PATH(row.unique_id))}
       >
         <PencilIcon className="size-5" />
       </button>
@@ -146,7 +144,7 @@ export default function UserScreenList() {
       <button
         title="Delete"
         className="text-red-600 hover:text-red-800"
-        onClick={() => handleDelete(row.id)}
+        onClick={() => handleDelete(row.unique_id)}
       >
         <TrashBinIcon className="size-5" />
       </button>
@@ -156,6 +154,7 @@ export default function UserScreenList() {
   const indexTemplate = (_: UserScreen, { rowIndex }: { rowIndex: number }) =>
     rowIndex + 1;
 
+  // ★ EXACT ORIGINAL UI HEADER
   const header = (
     <div className="flex justify-end items-center">
       <div className="flex items-center gap-3 bg-white px-3 py-1 rounded-md border border-gray-300 shadow-sm">
@@ -179,7 +178,9 @@ export default function UserScreenList() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">User Screens</h1>
-            <p className="text-gray-500 text-sm">Manage your user screen records</p>
+            <p className="text-gray-500 text-sm">
+              Manage your user screen records
+            </p>
           </div>
 
           <Button
@@ -207,41 +208,34 @@ export default function UserScreenList() {
           showGridlines
           className="p-datatable-sm"
         >
+
+          {/* S.No */}
           <Column header="S.No" body={indexTemplate} style={{ width: "80px" }} />
 
-          <Column
-            field="screen_name"
-            header="Screen Name"
-            sortable
-            style={{ minWidth: "180px" }}
-          />
+          {/* Screen Name */}
+          <Column field="screen_name" header="Screen Name" sortable style={{ minWidth: "180px" }} />
 
+          {/* Folder */}
           <Column field="folder_name" header="Folder" sortable style={{ minWidth: "140px" }} />
 
+          {/* Order */}
           <Column field="order_no" header="Order" sortable style={{ width: "100px" }} />
 
+          {/* Main Screen */}
           <Column
             field="mainscreen_name"
             header="Main Screen"
             sortable
-            body={(row: UserScreen) => row.mainscreen_name || "-"}
+            body={(row) => row.mainscreen_name || "-"}
             style={{ minWidth: "170px" }}
           />
 
-          {/* STATUS TOGGLE */}
-          <Column
-            field="is_active"
-            header="Status"
-            body={statusTemplate}
-            style={{ width: "150px" }}
-          />
+          {/* Status Toggle */}
+          <Column header="Status" body={statusTemplate} style={{ width: "150px" }} />
 
-          {/* ACTIONS */}
-          <Column
-            header="Actions"
-            body={actionTemplate}
-            style={{ width: "150px" }}
-          />
+          {/* Action Buttons */}
+          <Column header="Actions" body={actionTemplate} style={{ width: "150px" }} />
+
         </DataTable>
       </div>
     </div>

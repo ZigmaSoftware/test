@@ -102,8 +102,7 @@ export default function ContinentList() {
         const formData = new FormData();
         formData.append("is_active", String(checked));
 
-        await continentApi.update(row.unique_id, {
-          name: row.name,
+        await continentApi.patch(row.unique_id, {
           is_active: checked,
         });
         fetchContinents();

@@ -113,8 +113,7 @@ export default function PropertyList() {
     const updateStatus = async (value: boolean) => {
       try {
         
-       await propertiesApi.update(row.unique_id, {
-  property_name: row.property_name,   // required
+       await propertiesApi.patch(row.unique_id, {
   is_active: value,                      // toggle
 });
 

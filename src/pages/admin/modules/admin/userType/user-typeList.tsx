@@ -118,8 +118,7 @@ export default function UserTypePage() {
 
   const statusTemplate = (row: UserType) => {
     const updateStatus = async (value: boolean) => {
-     await userTypeapi.update(row.unique_id, {
-  name: row.name,         // correct field name
+     await userTypeapi.patch(row.unique_id, {
   is_active: value,
 });
 

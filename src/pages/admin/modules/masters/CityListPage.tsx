@@ -178,7 +178,7 @@ export default function CityList() {
     const updateStatus = async (value: boolean) => {
       try {
 
-        await cityApi.update(city.unique_id, { is_active: value });
+        await cityApi.patch(city.unique_id, { is_active: value });
 
         fetchCities();
       } catch (error) {

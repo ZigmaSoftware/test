@@ -1,189 +1,164 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {desktopApi} from "@/api";
-import { PencilIcon, TrashBinIcon } from "@/icons";
 import Swal from "sweetalert2";
+import { desktopApi } from "@/api";
+import { PencilIcon, TrashBinIcon } from "@/icons";
 import { getEncryptedRoute } from "@/utils/routeCache";
 
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
-import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { FilterMatchMode } from "primereact/api";
-
+import { Button } from "primereact/button";
 import { Switch } from "@/components/ui/switch";
 
 type MainUserScreen = {
-  id: number;
+  unique_id: string;
   mainscreen: string;
   is_active: boolean;
 };
 
 export default function MainUserScreenList() {
-  const [mainScreens, setMainScreens] = useState<MainUserScreen[]>([]);
+  const [data, setData] = useState<MainUserScreen[]>([]);
   const [loading, setLoading] = useState(true);
-  const [globalFilterValue, setGlobalFilterValue] = useState("");
-
-  // FIX: Remove strict typing exactly like UserTypeList
   const [filters, setFilters] = useState<any>({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS },
     mainscreen: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
   });
+  const [search, setSearch] = useState("");
 
   const navigate = useNavigate();
   const { encAdmins, encMainUserScreen } = getEncryptedRoute();
 
-  const ENC_NEW_PATH = `/${encAdmins}/${encMainUserScreen}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
-    `/${encAdmins}/${encMainUserScreen}/${id}/edit`;
+  const NEW_PATH = `/${encAdmins}/${encMainUserScreen}/new`;
+  const EDIT_PATH = (uid: string) =>
+    `/${encAdmins}/${encMainUserScreen}/${uid}/edit`;
 
-  const fetchMainScreens = async () => {
+  const loadData = async () => {
     try {
       const res = await desktopApi.get("mainuserscreen/");
-      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
-      setMainScreens(data);
-    } catch (error) {
-      console.error("Failed to fetch main user screens:", error);
+      setData(res.data);
+    } catch (err) {
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMainScreens();
+    loadData();
   }, []);
 
-  const handleDelete = async (id: number) => {
-    const confirmDelete = await Swal.fire({
-      title: "Are you sure?",
-      text: "This main user screen will be permanently deleted!",
+  const deleteRecord = async (uid: string) => {
+    const confirm = await Swal.fire({
+      title: "Delete?",
+      text: "This record will be permanently removed.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete it!",
     });
 
-    if (!confirmDelete.isConfirmed) return;
+    if (!confirm.isConfirmed) return;
 
     try {
-      await desktopApi.delete(`mainuserscreen/${id}/`);
-      Swal.fire({
-        icon: "success",
-        title: "Deleted successfully!",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-      fetchMainScreens();
-    } catch (error) {
-      console.error("Delete failed:", error);
+      await desktopApi.delete(`mainuserscreen/${uid}/`);
+      Swal.fire("Deleted!", "", "success");
+      loadData();
+    } catch (err) {
+      console.error("Delete failed:", err);
     }
   };
 
-  /* ------------------------------ FIXED FILTER HANDLER ------------------------------ */
-  const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const updated = { ...filters };
-    updated["global"].value = value; // NOW WORKS (no TypeScript error)
-    setFilters(updated);
-    setGlobalFilterValue(value);
-  };
-
-  /* ----------------------------- TOGGLE STATUS LIKE USER TYPE ----------------------------- */
-  const statusTemplate = (row: MainUserScreen) => {
-    const updateStatus = async (value: boolean) => {
-      try {
-        await desktopApi.put(`mainuserscreen/${row.id}/`, { is_active: value });
-        fetchMainScreens();
-      } catch (err) {
-        console.error("Status update failed:", err);
-      }
-    };
-
-    return (
-      <Switch
-        checked={row.is_active}
-        onCheckedChange={updateStatus}
-      />
+  const toggleStatus = async (row: MainUserScreen, newValue: boolean) => {
+    setData((prev) =>
+      prev.map((x) =>
+        x.unique_id === row.unique_id ? { ...x, is_active: newValue } : x
+      )
     );
+
+    try {
+      await desktopApi.patch(`mainuserscreen/${row.unique_id}/`, {
+        is_active: newValue,
+      });
+    } catch (err) {
+      console.error("Status update failed");
+      setData((prev) =>
+        prev.map((x) =>
+          x.unique_id === row.unique_id ? { ...x, is_active: !newValue } : x
+        )
+      );
+    }
   };
-
-  const actionTemplate = (row: MainUserScreen) => (
-    <div className="flex gap-2 justify-center">
-      <button
-        title="Edit"
-        className="text-blue-600 hover:text-blue-800"
-        onClick={() => navigate(ENC_EDIT_PATH(row.id))}
-      >
-        <PencilIcon className="size-5" />
-      </button>
-
-      <button
-        title="Delete"
-        className="text-red-600 hover:text-red-800"
-        onClick={() => handleDelete(row.id)}
-      >
-        <TrashBinIcon className="size-5" />
-      </button>
-    </div>
-  );
-
-  const indexTemplate = (_: MainUserScreen, { rowIndex }: { rowIndex: number }) =>
-    rowIndex + 1;
 
   const header = (
-    <div className="flex justify-end items-center">
-      <div className="flex items-center gap-3 bg-white px-3 py-1 rounded-lg border border-gray-300 shadow-sm">
-        <i className="pi pi-search text-gray-500" />
-        <InputText
-          value={globalFilterValue}
-          onChange={onGlobalFilterChange}
-          placeholder="Search main screens..."
-          className="p-inputtext-sm !border-0 !shadow-none"
-        />
-      </div>
+    <div className="flex justify-end">
+      <InputText
+        value={search}
+        onChange={(e) => {
+          const val = e.target.value;
+          setSearch(val);
+          setFilters({
+            ...filters,
+            global: { value: val, matchMode: FilterMatchMode.CONTAINS },
+          });
+        }}
+        placeholder="Search..."
+      />
     </div>
   );
 
-  if (loading) return <div className="p-6">Loading main user screens...</div>;
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="p-3">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Main User Screens</h1>
-            <p className="text-gray-500 text-sm">Manage your main user screen records</p>
-          </div>
-
-          <Button
-            label="Add Main Screen"
-            icon="pi pi-plus"
-            className="p-button-success"
-            onClick={() => navigate(ENC_NEW_PATH)}
-          />
-        </div>
-
-        <DataTable
-          value={mainScreens}
-          paginator
-          rows={10}
-          filters={filters}
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          globalFilterFields={["mainscreen"]}
-          header={header}
-          stripedRows
-          showGridlines
-          className="p-datatable-sm"
-        >
-          <Column header="S.No" body={indexTemplate} style={{ width: "80px" }} />
-          <Column field="mainscreen" header="Main Screen" sortable style={{ minWidth: "200px" }} />
-          <Column header="Status" body={statusTemplate} style={{ width: "150px" }} />
-          <Column header="Actions" body={actionTemplate} style={{ width: "150px" }} />
-        </DataTable>
-
+    <div className="p-6 bg-white rounded shadow">
+      <div className="flex justify-between mb-6">
+        <h2 className="text-xl font-bold">Main User Screens</h2>
+        <Button
+          label="Add New"
+          className="p-button-success"
+          icon="pi pi-plus"
+          onClick={() => navigate(NEW_PATH)}
+        />
       </div>
+
+      <DataTable
+        value={data}
+        paginator
+        rows={10}
+        filters={filters}
+        globalFilterFields={["mainscreen"]}
+        header={header}
+        showGridlines
+        stripedRows
+      >
+        <Column
+          header="S.No"
+          body={(_, { rowIndex }) => rowIndex + 1}
+          style={{ width: "80px" }}
+        />
+
+        <Column field="mainscreen" header="Main Screen" sortable />
+
+        <Column
+          header="Status"
+          body={(row) => (
+            <Switch checked={row.is_active} onCheckedChange={(v) => toggleStatus(row, v)} />
+          )}
+        />
+
+        <Column
+          header="Actions"
+          body={(row) => (
+            <div className="flex gap-2">
+              <button onClick={() => navigate(EDIT_PATH(row.unique_id))}>
+                <PencilIcon className="size-5 text-blue-600" />
+              </button>
+              <button onClick={() => deleteRecord(row.unique_id)}>
+                <TrashBinIcon className="size-5 text-red-600" />
+              </button>
+            </div>
+          )}
+        />
+      </DataTable>
     </div>
   );
 }

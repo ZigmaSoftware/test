@@ -1,15 +1,51 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
-import {desktopApi} from "@/api";
+import { desktopApi } from "@/api";
 import { Input } from "@/components/ui/input";
 import ComponentCard from "@/components/common/ComponentCard";
 import Label from "@/components/form/Label";
 import Select from "@/components/form/Select";
 import { getEncryptedRoute } from "@/utils/routeCache";
 
+type DropdownItem = { id: number; name?: string; property_name?: string; sub_property_name?: string; currency?: string };
+
+interface CustomerFormData {
+  customer_name: string;
+  contact_no: string;
+  building_no: string;
+  street: string;
+  area: string;
+  pincode: string;
+  latitude: string;
+  longitude: string;
+  id_proof_type: string;
+  id_no: string;
+  is_deleted: boolean;
+  is_active: boolean;
+  ward: string;
+  zone: string;
+  city: string;
+  district: string;
+  state: string;
+  country: string;
+  property: string;
+  sub_property: string;
+}
+
+interface DropdownsState {
+  wards: DropdownItem[];
+  zones: DropdownItem[];
+  cities: DropdownItem[];
+  districts: DropdownItem[];
+  states: DropdownItem[];
+  countries: DropdownItem[];
+  properties: DropdownItem[];
+  subProperties: DropdownItem[];
+}
+
 function CustomerCreationForm() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CustomerFormData>({
     customer_name: "",
     contact_no: "",
     building_no: "",
@@ -32,7 +68,7 @@ function CustomerCreationForm() {
     sub_property: "",
   });
 
-  const [dropdowns, setDropdowns] = useState({
+  const [dropdowns, setDropdowns] = useState<DropdownsState>({
     wards: [],
     zones: [],
     cities: [],
@@ -46,16 +82,13 @@ function CustomerCreationForm() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-
   const { encCustomerMaster, encCustomerCreation } = getEncryptedRoute();
-
   const ENC_LIST_PATH = `/${encCustomerMaster}/${encCustomerCreation}`;
-
 
   const { id } = useParams();
   const isEdit = Boolean(id);
 
-  //  Generic handler for field updates
+  // Generic handler for field updates
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -63,9 +96,7 @@ function CustomerCreationForm() {
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
-
-
-  //Fetch dropdown data (wards, zones, etc.)
+  // Fetch dropdown data (wards, zones, etc.)
   const fetchDropdowns = async () => {
     try {
       const [
@@ -88,7 +119,7 @@ function CustomerCreationForm() {
         desktopApi.get("subproperties/"),
       ]);
 
-      const obj = {
+      setDropdowns({
         wards: wardsRes.data,
         zones: zonesRes.data,
         cities: citiesRes.data,
@@ -97,22 +128,47 @@ function CustomerCreationForm() {
         countries: countriesRes.data,
         properties: propertiesRes.data,
         subProperties: subPropsRes.data,
-      };
-      console.log(obj);
-
-      setDropdowns(obj);
+      });
     } catch (error) {
       console.error("Dropdown fetch failed:", error);
     }
   };
 
-  // 🔹 Load customer data for edit mode
+  // Load dropdowns + edit data
   useEffect(() => {
     fetchDropdowns();
-    if (isEdit) {
+
+    if (isEdit && id) {
       desktopApi
         .get(`customercreations/${id}/`)
-        .then((res) => setFormData(res.data))
+        .then((res) => {
+          const d = res.data;
+
+          // Map backend *_id fields into our local select values
+          setFormData({
+            customer_name: d.customer_name || "",
+            contact_no: d.contact_no || "",
+            building_no: d.building_no || "",
+            street: d.street || "",
+            area: d.area || "",
+            pincode: d.pincode || "",
+            latitude: d.latitude || "",
+            longitude: d.longitude || "",
+            id_proof_type: d.id_proof_type || "",
+            id_no: d.id_no || "",
+            is_deleted: d.is_deleted ?? false,
+            is_active: d.is_active ?? true,
+
+            ward: d.ward_id ? String(d.ward_id) : "",
+            zone: d.zone_id ? String(d.zone_id) : "",
+            city: d.city_id ? String(d.city_id) : "",
+            district: d.district_id ? String(d.district_id) : "",
+            state: d.state_id ? String(d.state_id) : "",
+            country: d.country_id ? String(d.country_id) : "",
+            property: d.property_id ? String(d.property_id) : "",
+            sub_property: d.sub_property_id ? String(d.sub_property_id) : "",
+          });
+        })
         .catch((err) => {
           console.error("Error loading customer:", err);
           Swal.fire({
@@ -124,11 +180,10 @@ function CustomerCreationForm() {
     }
   }, [id, isEdit]);
 
-  //  Handle save with full validation
+  // Handle save with validation + mapping
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 🔹 Comprehensive validation
     const {
       customer_name,
       contact_no,
@@ -175,34 +230,31 @@ function CustomerCreationForm() {
         icon: "warning",
         title: "Missing Required Fields",
         text: "Please fill all mandatory fields — customer name, contact, location, address, and ID details are required.",
-        confirmButtonColor: "#3085d6",
       });
       return;
     }
 
-    // 🔸 Contact number format
+    // Contact number format
     if (!/^\d{10}$/.test(contact_no)) {
       Swal.fire({
         icon: "warning",
         title: "Invalid Contact Number",
         text: "Contact number must be exactly 10 digits.",
-        confirmButtonColor: "#3085d6",
       });
       return;
     }
 
-    // 🔸 Pincode validation
+    // Pincode validation
     if (!/^\d{6}$/.test(pincode)) {
       Swal.fire({
         icon: "warning",
         title: "Invalid Pincode",
         text: "Pincode must be exactly 6 digits.",
-        confirmButtonColor: "#3085d6",
       });
       return;
     }
 
-    // 🔸 Latitude/Longitude validation
+    // Latitude/Longitude validation
     const lat = parseFloat(latitude);
     const lon = parseFloat(longitude);
     if (
@@ -217,15 +269,14 @@ function CustomerCreationForm() {
         icon: "warning",
         title: "Invalid Coordinates",
         text: "Please enter valid latitude and longitude values.",
-        confirmButtonColor: "#3085d6",
       });
       return;
     }
 
-    // save — map relational fields to backend's *_id names
     setLoading(true);
 
-    const toId = (v: any) => (v === null || v === undefined || v === "" ? null : Number(v));
+    const toId = (v: any) =>
+      v === null || v === undefined || v === "" ? null : Number(v);
 
     const payload: any = {
       customer_name,
@@ -240,7 +291,6 @@ function CustomerCreationForm() {
       id_no,
       is_deleted: formData.is_deleted ?? false,
       is_active: formData.is_active ?? true,
-      // relational fields mapped to backend expected names
       ward_id: toId(ward),
       zone_id: toId(zone),
       city_id: toId(city),
@@ -252,11 +302,7 @@ function CustomerCreationForm() {
     };
 
     try {
-      // Debug: log payload sent to server
-      // eslint-disable-next-line no-console
-      console.log("Customer payload:", payload);
-
-      if (isEdit) {
+      if (isEdit && id) {
         await desktopApi.put(`customercreations/${id}/`, payload);
         Swal.fire({
           icon: "success",
@@ -275,14 +321,8 @@ function CustomerCreationForm() {
       }
       navigate(ENC_LIST_PATH);
     } catch (error: any) {
-      // Log full error for debugging
-      // eslint-disable-next-line no-console
       console.error("Save failed:", error);
-      // Extract backend response (may contain field-level errors)
       const serverData = error?.response?.data;
-      // eslint-disable-next-line no-console
-      console.error("Server response data:", serverData);
-
       const pretty = serverData
         ? typeof serverData === "string"
           ? serverData
@@ -331,7 +371,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="building_no">Building No</Label>
+            <Label htmlFor="building_no">Building No *</Label>
             <Input
               id="building_no"
               type="text"
@@ -343,7 +383,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="street">Street</Label>
+            <Label htmlFor="street">Street *</Label>
             <Input
               id="street"
               type="text"
@@ -355,7 +395,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="area">Area</Label>
+            <Label htmlFor="area">Area *</Label>
             <Input
               id="area"
               type="text"
@@ -367,7 +407,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="pincode">Pincode</Label>
+            <Label htmlFor="pincode">Pincode *</Label>
             <Input
               id="pincode"
               type="text"
@@ -379,7 +419,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="latitude">Latitude</Label>
+            <Label htmlFor="latitude">Latitude *</Label>
             <Input
               id="latitude"
               type="text"
@@ -391,7 +431,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="longitude">Longitude</Label>
+            <Label htmlFor="longitude">Longitude *</Label>
             <Input
               id="longitude"
               type="text"
@@ -404,13 +444,13 @@ function CustomerCreationForm() {
 
           {/* ID Proof Section */}
           <div>
-            <Label htmlFor="id_proof_type">ID Proof Type</Label>
+            <Label htmlFor="id_proof_type">ID Proof Type *</Label>
             <Select
               id="id_proof_type"
               value={formData.id_proof_type}
               required
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, id_proof_type: val }))
+                setFormData((prev) => ({ ...prev, id_proof_type: String(val) }))
               }
               options={[
                 { value: "AADHAAR", label: "Aadhaar" },
@@ -423,7 +463,7 @@ function CustomerCreationForm() {
           </div>
 
           <div>
-            <Label htmlFor="id_no">ID Number</Label>
+            <Label htmlFor="id_no">ID Number *</Label>
             <Input
               id="id_no"
               type="text"
@@ -434,132 +474,131 @@ function CustomerCreationForm() {
             />
           </div>
 
-
           {/* Dropdowns for Relations */}
           <div>
-            <Label htmlFor="ward">Ward</Label>
+            <Label htmlFor="ward">Ward *</Label>
             <Select
               id="ward"
               required
               value={formData.ward}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, ward: val }))
+                setFormData((prev) => ({ ...prev, ward: String(val) }))
               }
-              options={dropdowns.wards.map((w: any) => ({
+              options={dropdowns.wards.map((w) => ({
                 value: w.id,
-                label: w.name,
+                label: w.name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="zone">Zone</Label>
+            <Label htmlFor="zone">Zone *</Label>
             <Select
               id="zone"
               required
               value={formData.zone}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, zone: val }))
+                setFormData((prev) => ({ ...prev, zone: String(val) }))
               }
-              options={dropdowns.zones.map((z: any) => ({
+              options={dropdowns.zones.map((z) => ({
                 value: z.id,
-                label: z.name,
+                label: z.name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="city">City</Label>
+            <Label htmlFor="city">City *</Label>
             <Select
               id="city"
               required
               value={formData.city}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, city: val }))
+                setFormData((prev) => ({ ...prev, city: String(val) }))
               }
-              options={dropdowns.cities.map((c: any) => ({
+              options={dropdowns.cities.map((c) => ({
                 value: c.id,
-                label: c.name,
+                label: c.name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="district">District</Label>
+            <Label htmlFor="district">District *</Label>
             <Select
               id="district"
               required
               value={formData.district}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, district: val }))
+                setFormData((prev) => ({ ...prev, district: String(val) }))
               }
-              options={dropdowns.districts.map((d: any) => ({
+              options={dropdowns.districts.map((d) => ({
                 value: d.id,
-                label: d.name,
+                label: d.name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="state">State</Label>
+            <Label htmlFor="state">State *</Label>
             <Select
               id="state"
               required
               value={formData.state}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, state: val }))
+                setFormData((prev) => ({ ...prev, state: String(val) }))
               }
-              options={dropdowns.states.map((s: any) => ({
+              options={dropdowns.states.map((s) => ({
                 value: s.id,
-                label: s.name,
+                label: s.name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="country">Country</Label>
+            <Label htmlFor="country">Country *</Label>
             <Select
               id="country"
               required
               value={formData.country}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, country: val }))
+                setFormData((prev) => ({ ...prev, country: String(val) }))
               }
-              options={dropdowns.countries.map((c: any) => ({
+              options={dropdowns.countries.map((c) => ({
                 value: c.id,
-                label: `${c.name} (${c.currency || ""})`,
+                label: `${c.name || ""}${c.currency ? ` (${c.currency})` : ""}`,
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="property">Property</Label>
+            <Label htmlFor="property">Property *</Label>
             <Select
               id="property"
               required
               value={formData.property}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, property: val }))
+                setFormData((prev) => ({ ...prev, property: String(val) }))
               }
-              options={dropdowns.properties.map((p: any) => ({
+              options={dropdowns.properties.map((p) => ({
                 value: p.id,
-                label: p.property_name,
+                label: p.property_name || "",
               }))}
             />
           </div>
 
           <div>
-            <Label htmlFor="sub_property">Sub Property</Label>
+            <Label htmlFor="sub_property">Sub Property *</Label>
             <Select
               id="sub_property"
               required
               value={formData.sub_property}
               onChange={(val) =>
-                setFormData((prev) => ({ ...prev, sub_property: val }))
+                setFormData((prev) => ({ ...prev, sub_property: String(val) }))
               }
-              options={dropdowns.subProperties.map((sp: any) => ({
+              options={dropdowns.subProperties.map((sp) => ({
                 value: sp.id,
-                label: sp.sub_property_name,
+                label: sp.sub_property_name || "",
               }))}
             />
           </div>
@@ -577,8 +616,8 @@ function CustomerCreationForm() {
                 ? "Updating..."
                 : "Saving..."
               : isEdit
-                ? "Update"
-                : "Save"}
+              ? "Update"
+              : "Save"}
           </button>
           <button
             type="button"

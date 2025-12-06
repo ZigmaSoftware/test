@@ -79,7 +79,7 @@ export default function UserPermission() {
       const res = await desktopApi.get("user-type/");
       const activeTypes = res.data
         .filter((t: any) => t.is_active)
-        .map((t: any) => ({ value: t.id.toString(), label: t.name }));
+        .map((t: any) => ({ value: String(t.unique_id ?? t.id ?? t.uniqueId), label: t.name }));
       setUserTypes(activeTypes);
     } catch (err) {
       console.error("Error fetching user types:", err);
@@ -252,7 +252,8 @@ export default function UserPermission() {
     }
 
     const payload = screens.map((s) => ({
-      user_type: Number(selectedUserType),
+      // user_type is a string unique_id for UserType (backend uses string PK)
+      user_type: selectedUserType,
       main_screen: Number(selectedMainScreen),
       user_screen: s.id,
       permissions: s.permissions,

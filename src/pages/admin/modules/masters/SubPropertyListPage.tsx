@@ -114,7 +114,7 @@ export default function SubPropertyList() {
   const statusTemplate = (row: SubProperty) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await subPropertiesApi.update(row.unique_id, { is_active: value });
+        await subPropertiesApi.patch(row.unique_id, { is_active: value });
         
         fetchSubProperties();
       } catch (err) {

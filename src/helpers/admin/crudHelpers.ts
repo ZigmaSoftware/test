@@ -15,6 +15,11 @@ export type CrudHelpers<T = any> = {
     payload: Payload,
     config?: AxiosRequestConfig
   ) => Promise<T>;
+  patch: <Payload = unknown>(
+    id: number | string,
+    payload: Payload,
+    config?: AxiosRequestConfig
+  ) => Promise<T>;
   remove: (id: number | string, config?: AxiosRequestConfig) => Promise<void>;
 };
 
@@ -36,6 +41,10 @@ export const createCrudHelpers = <T = any>(basePath: string): CrudHelpers<T> => 
     },
     update: async (id, payload, config) => {
       const { data } = await desktopApi.put<T>(`${resource}${id}/`, payload, config);
+      return data;
+    },
+    patch: async (id, payload, config) => {
+      const { data } = await desktopApi.patch<T>(`${resource}${id}/`, payload, config);
       return data;
     },
     remove: async (id, config) => {

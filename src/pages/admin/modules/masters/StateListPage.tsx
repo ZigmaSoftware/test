@@ -175,7 +175,7 @@ export default function StateList() {
   const statusTemplate = (row: StateRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await stateApi.update(row.unique_id, { is_active: value });
+        await stateApi.patch(row.unique_id, { is_active: value });
         void fetchStates();
       } catch (error) {
         console.error("Status update failed:", error);

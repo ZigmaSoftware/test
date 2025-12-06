@@ -35,7 +35,9 @@ export default function Select({
   required,
 }: SelectProps) {
   const normalizedValue = value === null || value === undefined ? "" : String(value);
-  const shadValue = normalizedValue === "" ? undefined : normalizedValue;
+  // Always provide a string value to avoid switching between controlled/uncontrolled
+  // (use empty string for no selection)
+  const shadValue = normalizedValue;
   const finalPlaceholder = placeholder ?? options[0]?.label ?? "Select an option";
 
   return (

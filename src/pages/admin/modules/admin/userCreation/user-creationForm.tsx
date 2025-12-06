@@ -70,8 +70,8 @@ export default function UserCreationForm() {
     desktopApi.get("user-type/").then((res) => {
       setUserTypes(
         res.data.map((u: any) => ({
-          value: u.id.toString(),
-          label: u.name.toLowerCase(),
+          value: String(u.unique_id ?? u.id ?? u.uniqueId),
+          label: (u.name || "").toLowerCase(),
         }))
       );
     });
@@ -165,7 +165,8 @@ export default function UserCreationForm() {
     desktopApi.get(`user/${id}/`).then((res) => {
       const u = res.data;
 
-      setUserType(u.user_type?.toString());
+      // API exposes user_type as read-only `user_type_id` (unique_id). Use that.
+      setUserType(u.user_type_id ? String(u.user_type_id) : (u.user_type ? String(u.user_type) : ""));
       setPassword(u.password);
       setIsActive(u.is_active);
 
@@ -187,7 +188,8 @@ export default function UserCreationForm() {
     e.preventDefault();
 
     const payload: any = {
-      user_type: Number(userType),
+      // `userType` holds the UserType `unique_id` (string primary key).
+      user_type: userType,
       password,
       is_active: isActive ? 1 : 0,
     };

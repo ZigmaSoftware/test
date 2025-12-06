@@ -23,9 +23,10 @@ import { Switch } from "@/components/ui/switch";
 export default function UserCreationList() {
   const navigate = useNavigate();
   const { encAdmins, encUserCreation } = getEncryptedRoute();
+
   const ENC_NEW = `/${encAdmins}/${encUserCreation}/new`;
-  const ENC_EDIT = (id: number) =>
-    `/${encAdmins}/${encUserCreation}/${id}/edit`;
+  const ENC_EDIT = (uid: string | number) =>
+    `/${encAdmins}/${encUserCreation}/${uid}/edit`;
 
   const [users, setUsers] = useState<any[]>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -34,10 +35,11 @@ export default function UserCreationList() {
     global: { value: null, matchMode: FilterMatchMode.CONTAINS },
   });
 
+  // LOAD USERS
   const fetchUsers = async () => {
     try {
       const res = await desktopApi.get("user/");
-      setUsers(res.data);
+      setUsers(res.data || []);
     } catch (err) {
       console.error("Error loading users:", err);
     }
@@ -47,15 +49,16 @@ export default function UserCreationList() {
     fetchUsers();
   }, []);
 
-  /** ------------ FILTERED LISTS ---------------- */
+  // FIXED FILTER — NORMALIZED CASE
   const staffList = users.filter(
-    (u) => u.user_type_name?.toString().toLowerCase() === "staff"
-  );
-  const customerList = users.filter(
-    (u) => u.user_type_name?.toString().toLowerCase() === "customer"
+    (u) => (u.user_type_name || "").toLowerCase() === "staff"
   );
 
-  /** ------------ QR POPUP ------------------ */
+  const customerList = users.filter(
+    (u) => (u.user_type_name || "").toLowerCase() === "customer"
+  );
+
+  // SAFE QR POPUP
   const openQRPopup = (data: any) => {
     Swal.fire({
       title: "Customer QR",
@@ -71,32 +74,31 @@ export default function UserCreationList() {
     });
   };
 
-  /** ---------- Delete User ---------- */
-  const handleDelete = async (id: number) => {
+  // DELETE — uses unique_id if available
+  const handleDelete = async (uid: string | number) => {
     const r = await Swal.fire({
       title: "Are you sure?",
-      text: "This user will be soft-deleted!",
+      text: "This user will be deleted!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Delete",
     });
 
     if (!r.isConfirmed) return;
 
-    await desktopApi.delete(`user/${id}/`);
-    Swal.fire("Deleted!", "User removed.", "success");
+    await desktopApi.delete(`user/${uid}/`);
+    Swal.fire("Deleted!", "", "success");
     fetchUsers();
   };
 
-  /** ---------- Toggle Status ---------- */
-  const handleStatusToggle = async (id: number, value: boolean) => {
-    await desktopApi.put(`user/${id}/`, { is_active: value });
+  // TOGGLE — works with unique_id OR id
+  const handleStatusToggle = async (row: any, value: boolean) => {
+    const uid = row.unique_id ?? row.id;
+    await (await import("@/helpers/admin")).adminApi.users.patch(uid, {
+      is_active: value,
+    });
     fetchUsers();
   };
 
-  /** ---------- UTILS ---------- */
   const cap = (t?: string) =>
     t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : "";
 
@@ -138,7 +140,7 @@ export default function UserCreationList() {
         />
       </div>
 
-      {/* ------- TABS ------- */}
+      {/* ------------------------- TABS ------------------------- */}
       <Tabs defaultValue="staff">
         <TabsList className="flex gap-3 pb-2">
           <TabsTrigger value="staff" className="px-4 py-2 border rounded">
@@ -149,7 +151,7 @@ export default function UserCreationList() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ================= STAFF TABLE ================= */}
+        {/* ===================== STAFF ====================== */}
         <TabsContent value="staff">
           <DataTable
             value={staffList}
@@ -162,109 +164,103 @@ export default function UserCreationList() {
             showGridlines
             className="p-datatable-sm mt-4"
           >
-            <Column
-              header="S.No"
-              body={(_, opt) => opt.rowIndex + 1}
-              style={{ width: "80px" }}
-            />
-            <Column
-              header="User Type"
-              field="user_type_name"
-              body={(r) => cap(r.user_type_name)}
-            />
-            <Column
-              header="Staff User Type"
-              field="staffusertype_name"
-              body={(r) => cap(r.staffusertype_name)}
-            />
-            <Column
-              header="Staff Name"
-              field="staff_name"
-              body={(r) => cap(r.staff_name)}
-            />
+            <Column header="S.No" body={(_, opt) => opt.rowIndex + 1} />
+
+            <Column header="User Type" body={(r) => cap(r.user_type_name)} />
+            <Column header="Staff User Type" body={(r) => cap(r.staffusertype_name)} />
+            <Column header="Staff" body={(r) => cap(r.staff_name)} />
             <Column header="Zone" field="zone_name" />
             <Column header="Ward" field="ward_name" />
+
             <Column
               header="Status"
               body={(row) => (
                 <Switch
                   checked={row.is_active}
-                  onCheckedChange={(val) => handleStatusToggle(row.id, val)}
+                  onCheckedChange={(val) => handleStatusToggle(row, val)}
                 />
               )}
             />
+
             <Column
               header="Actions"
-              style={{ width: "140px" }}
-              body={(row) => (
-                <div className="flex gap-3">
-                  <PencilIcon
-                    className="cursor-pointer"
-                    onClick={() => navigate(ENC_EDIT(row.id))}
-                  />
-                  <TrashBinIcon
-                    className="cursor-pointer text-red-600"
-                    onClick={() => handleDelete(row.id)}
-                  />
-                </div>
-              )}
+              body={(row) => {
+                const uid = row.unique_id ?? row.id;
+                return (
+                  <div className="flex gap-3">
+                    <PencilIcon
+                      className="cursor-pointer"
+                      onClick={() => navigate(ENC_EDIT(uid))}
+                    />
+                    <TrashBinIcon
+                      className="cursor-pointer text-red-600"
+                      onClick={() => handleDelete(uid)}
+                    />
+                  </div>
+                );
+              }}
             />
           </DataTable>
         </TabsContent>
 
-        {/* ================= CUSTOMER TABLE ================= */}
+        {/* ===================== CUSTOMER ====================== */}
         <TabsContent value="customer">
           <DataTable
             value={customerList}
             paginator
             rows={10}
             filters={filters}
-            globalFilterFields={[
-              "customer.customer_name",
-              "customer.contact_no",
-            ]}
+            globalFilterFields={["customer.customer_name", "customer.contact_no"]}
             header={searchBar}
             stripedRows
             showGridlines
             className="p-datatable-sm mt-4"
           >
-            <Column
-              header="S.No"
-              body={(_, opt) => opt.rowIndex + 1}
-              style={{ width: "80px" }}
-            />
+            <Column header="S.No" body={(_, opt) => opt.rowIndex + 1} />
+
             <Column header="User Type" body={(r) => cap(r.user_type_name)} />
+
             <Column
               header="Customer Name"
-              body={(r) => r.customer?.customer_name}
+              body={(r) => r.customer?.customer_name || "—"}
             />
-            <Column header="Mobile" body={(r) => r.customer?.contact_no} />
-            <Column header="Ward" body={(r) => r.customer?.ward_name} />
-            <Column header="Zone" body={(r) => r.customer?.zone_name} />
-            <Column header="City" body={(r) => r.customer?.city_name} />
-            <Column header="State" body={(r) => r.customer?.state_name} />
+
+            <Column header="Mobile" body={(r) => r.customer?.contact_no || "—"} />
+
+            <Column header="Ward" body={(r) => r.customer?.ward_name || "—"} />
+            <Column header="Zone" body={(r) => r.customer?.zone_name || "—"} />
+
+            <Column header="City" body={(r) => r.customer?.city_name || "—"} />
+
+            <Column
+              header="State"
+              body={(r) => r.customer?.state_name || "—"}
+            />
 
             <Column
               header="QR"
-              body={(row) =>
-                row.customer ? (
+              body={(row) => {
+                const c = row.customer;
+                if (!c) return "—";
+
+                return (
                   <button
                     className="text-blue-600 underline"
                     onClick={() =>
                       openQRPopup({
-                        id: row.customer.id,
-                        name: row.customer.customer_name,
-                        mobile: row.customer.contact_no,
-                        address: `${row.customer.building_no}, ${row.customer.street}, ${row.customer.area}`,
+                        id: c.id,
+                        name: c.customer_name,
+                        mobile: c.contact_no,
+                        address: `${c.building_no || ""}, ${c.street || ""}, ${
+                          c.area || ""
+                        }`,
                       })
                     }
                   >
                     View
                   </button>
-                ) : (
-                  "—"
-                )
-              }
+                );
+              }}
             />
 
             <Column
@@ -272,26 +268,28 @@ export default function UserCreationList() {
               body={(row) => (
                 <Switch
                   checked={row.is_active}
-                  onCheckedChange={(val) => handleStatusToggle(row.id, val)}
+                  onCheckedChange={(val) => handleStatusToggle(row, val)}
                 />
               )}
             />
 
             <Column
               header="Actions"
-              style={{ width: "140px" }}
-              body={(row) => (
-                <div className="flex gap-3">
-                  <PencilIcon
-                    className="cursor-pointer"
-                    onClick={() => navigate(ENC_EDIT(row.id))}
-                  />
-                  <TrashBinIcon
-                    className="cursor-pointer text-red-600"
-                    onClick={() => handleDelete(row.id)}
-                  />
-                </div>
-              )}
+              body={(row) => {
+                const uid = row.unique_id ?? row.id;
+                return (
+                  <div className="flex gap-3">
+                    <PencilIcon
+                      className="cursor-pointer"
+                      onClick={() => navigate(ENC_EDIT(uid))}
+                    />
+                    <TrashBinIcon
+                      className="cursor-pointer text-red-600"
+                      onClick={() => handleDelete(uid)}
+                    />
+                  </div>
+                );
+              }}
             />
           </DataTable>
         </TabsContent>

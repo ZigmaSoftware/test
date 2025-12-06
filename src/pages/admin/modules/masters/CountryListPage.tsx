@@ -180,7 +180,8 @@ export default function CountryList() {
   const statusTemplate = (row: CountryRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await countryApi.update(row.unique_id, { is_active: value });
+        // Use PATCH for partial updates to avoid PUT validation errors
+        await countryApi.patch(row.unique_id, { is_active: value });
         void fetchCountries();
       } catch (error) {
         console.error("Status update failed:", error);

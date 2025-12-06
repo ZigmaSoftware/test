@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {desktopApi}from "@/api";
+import { desktopApi } from "@/api";
 import Swal from "sweetalert2";
 
 import { DataTable } from "primereact/datatable";
@@ -64,7 +64,10 @@ export default function CustomerCreationList() {
   const fetchCustomers = async () => {
     try {
       const res = await desktopApi.get("customercreations/");
-      setCustomers(res.data);
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setCustomers(data);
+    } catch (err) {
+      console.error("Failed to load customers:", err);
     } finally {
       setLoading(false);
     }
@@ -85,21 +88,25 @@ export default function CustomerCreationList() {
 
     if (!confirm.isConfirmed) return;
 
-    await desktopApi.delete(`customercreations/${id}/`);
-    Swal.fire({
-      icon: "success",
-      title: "Deleted successfully!",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-
-    fetchCustomers();
+    try {
+      await desktopApi.delete(`customercreations/${id}/`);
+      Swal.fire({
+        icon: "success",
+        title: "Deleted successfully!",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      fetchCustomers();
+    } catch (err) {
+      console.error("Delete failed:", err);
+      Swal.fire("Error", "Delete failed", "error");
+    }
   };
 
   const cap = (str?: string) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
-  const onGlobalFilterChange = (e: any) => {
+  const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const updated = { ...filters };
     updated["global"].value = e.target.value;
     setFilters(updated);
@@ -125,13 +132,15 @@ export default function CustomerCreationList() {
     <div
       className="cursor-pointer flex justify-center"
       onClick={() => {
-        const qrText = `Customer ID: ${c.unique_id}
-Customer Name: ${c.customer_name}
-Contact: ${c.contact_no}
-Address: ${c.building_no}, ${c.street}, ${c.area}, ${c.pincode}
-${c.city_name}, ${c.district_name}, ${c.state_name}
-Ward: ${c.ward_name} | Zone: ${c.zone_name}
-Property: ${c.property_name} - ${c.sub_property_name}`;
+        const safe = (v: any) => v || "";
+        const qrText = `
+Customer: ${safe(c.customer_name)}
+Mobile: ${safe(c.contact_no)}
+Address: ${safe(c.building_no)}, ${safe(c.street)}, ${safe(c.area)}, ${safe(c.pincode)}
+Ward: ${safe(c.ward_name)} | Zone: ${safe(c.zone_name)}
+City: ${safe(c.city_name)} | State: ${safe(c.state_name)}
+Property: ${safe(c.property_name)} - ${safe(c.sub_property_name)}
+        `.trim();
 
         setQrData(qrText);
         setQrModalOpen(true);
@@ -153,22 +162,25 @@ Property: ${c.property_name} - ${c.sub_property_name}`;
     </div>
   );
 
-  /* --------------------- TOGGLE STATUS --------------------- */
+  // Toggle status
   const statusTemplate = (row: Customer) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await desktopApi.put(`customercreations/${row.id}/`, {
+        await desktopApi.patch(`customercreations/${row.id}/`, {
           is_active: value,
         });
-        fetchCustomers();
+        setCustomers((prev) =>
+          prev.map((c) =>
+            c.id === row.id ? { ...c, is_active: value } : c
+          )
+        );
       } catch (err) {
         console.error("Status update failed:", err);
+        Swal.fire("Error", "Failed to update status", "error");
       }
     };
 
-    return (
-      <Switch checked={row.is_active} onCheckedChange={updateStatus} />
-    );
+    return <Switch checked={row.is_active} onCheckedChange={updateStatus} />;
   };
 
   const actionTemplate = (c: Customer) => (
@@ -296,7 +308,6 @@ Property: ${c.property_name} - ${c.sub_property_name}`;
 
             <Column header="QR" body={qrTemplate} style={{ width: "100px" }} />
 
-            {/* 🔥 New Toggle Status */}
             <Column
               field="is_active"
               header="Status"

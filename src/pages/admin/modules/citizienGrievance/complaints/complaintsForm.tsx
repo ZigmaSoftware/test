@@ -100,30 +100,28 @@ export default function ComplaintAddForm() {
   }, [mainCategory, allSubCategories, subCategory]);
 
   const loadZones = async (cid: number, currentZoneId?: string) => {
-    const res = await desktopApi.get(`/zones/?customer=${cid}`);
-    const list = res.data || [];
-    setZones(list);
-
-    if (currentZoneId) {
-      const exists = list.some((z: any) => String(z.id) === String(currentZoneId));
-      if (!exists) setZone("");
-    }
+    // The backend zone endpoint does not support filtering by customer id.
+    // Customers already contain `zone_id` and `zone_name` read-only fields, so
+    // prefer setting zones from the selected customer rather than calling the API.
+    // Keep this helper for compatibility but avoid calling the unsupported route.
+    return;
   };
 
-  const loadWards = async (zid: number, preselectWardId?: string) => {
-    const res = await desktopApi.get(`/wards/?zone=${zid}`);
+  const loadWards = async (zoneUid: string, preselectWardId?: string) => {
+    // zoneUid is a zone unique_id string (e.g. "ZONE...")
+    const res = await desktopApi.get(`/wards/?zone=${zoneUid}`);
     const list = res.data || [];
     setWards(list);
 
     if (preselectWardId) {
-      const found = list.some((w: any) => String(w.id) === String(preselectWardId));
+      const found = list.some((w: any) => String(w.id) === String(preselectWardId) || String(w.unique_id) === String(preselectWardId));
       setWard(found ? String(preselectWardId) : "");
     } else {
       setWard("");
     }
   };
 
-  const onCustomerChange = (id: string) => {
+  const onCustomerChange = async (id: string) => {
     const c = customers.find((x) => String(x.id) === String(id));
     setCustomer(c);
     setContact(c?.contact_no || "");
@@ -143,19 +141,21 @@ export default function ComplaintAddForm() {
         : ""
     );
 
-    const zoneId = c?.zone || c?.zone_id || c?.zoneId;
-    const wardId = c?.ward || c?.ward_id || c?.wardId;
+    // Customers expose zone_id/zone_name and ward_id/ward_name as read-only fields.
+    const zoneUid = c?.zone_id || c?.zone || c?.zoneId;
+    const wardId = c?.ward_id || c?.ward || c?.wardId;
 
-    setZone(zoneId ? String(zoneId) : "");
+    // Set selected zone/ward values
+    setZone(zoneUid ? String(zoneUid) : "");
     setWard(wardId ? String(wardId) : "");
 
-    if (c?.id) {
-      loadZones(c.id, zoneId ? String(zoneId) : undefined);
-    }
-
-    if (zoneId) {
-      loadWards(Number(zoneId), wardId ? String(wardId) : undefined);
+    // Set zones list from customer so the disabled select shows the value
+    if (zoneUid) {
+      setZones([{ id: zoneUid, name: c?.zone_name || c?.zoneName || "" }]);
+      // Wards endpoint expects zone unique_id; pass the UID string
+      await loadWards(String(zoneUid), wardId ? String(wardId) : undefined);
     } else {
+      setZones([]);
       setWards([]);
     }
   };
@@ -283,9 +283,9 @@ export default function ComplaintAddForm() {
               disabled
               onChange={(v) => {
                 setZone(v);
-                loadWards(Number(v));
+                loadWards(String(v));
               }}
-              options={zones.map((z) => ({ value: String(z.id), label: z.name }))}
+              options={zones.map((z) => ({ value: String(z.unique_id ?? z.id), label: z.name }))}
             />
           </div>
 
@@ -296,7 +296,7 @@ export default function ComplaintAddForm() {
               value={ward}
               disabled
               onChange={(v) => setWard(v)}
-              options={wards.map((w) => ({ value: String(w.id), label: w.name }))}
+              options={wards.map((w) => ({ value: String(w.unique_id ?? w.id), label: w.name }))}
             />
           </div>
 

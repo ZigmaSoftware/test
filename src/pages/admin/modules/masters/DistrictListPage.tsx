@@ -178,7 +178,7 @@ export default function DistrictListPage() {
   const statusTemplate = (row: DistrictRecord) => {
     const updateStatus = async (value: boolean) => {
       try {
-        await districtApi.update(row.unique_id, { is_active: value });
+        await districtApi.patch(row.unique_id, { is_active: value });
         fetchDistricts();
       } catch (e) {
         console.error("Toggle update failed:", e);

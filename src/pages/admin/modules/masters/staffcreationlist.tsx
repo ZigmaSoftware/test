@@ -25,6 +25,7 @@ type Staff = {
   site_name?: string;
   active_status: boolean;
   salary_type?: string;
+  contact_mobile?: string;
   contact_details?: {
     mobile_no?: string;
   };
@@ -123,18 +124,20 @@ export default function StaffCreationList() {
   const statusTemplate = (row: Staff) => {
     const updateStatus = async (value: boolean) => {
       try {
-        const formData = new FormData();
-        formData.append("active_status", String(value));
+        // Staff viewset uses PK lookup (numeric id) and expects multipart/form-data.
+        const { adminApi } = await import("@/helpers/admin");
+        const form = new FormData();
+        form.append("active_status", String(value ? "1" : "0"));
 
-        await desktopApi.put(`staffcreation/${row.id}/`, formData, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+        await adminApi.staffCreation.patch(row.id, form, {
+          headers: { "Content-Type": undefined as unknown as string },
         });
 
+        Swal.fire({ icon: "success", title: "Status updated", timer: 1200, showConfirmButton: false });
         fetchStaffs(filterParams);
       } catch (err) {
-        Swal.fire("Error", "Failed to update status", "error");
+        console.error("Failed to update staff status:", err);
+        Swal.fire({ icon: "error", title: "Update failed", text: "Unable to change status", });
       }
     };
 
@@ -347,7 +350,11 @@ Status: ${row.active_status ? "Active" : "Inactive"}
             <Column field="site_name" header="Site Name" sortable />
             <Column
               header="Contact"
-              body={(row: Staff) => row.contact_details?.mobile_no || "-"}
+              body={(row: Staff) => {
+                // support both flattened and nested shapes returned by backend
+                const mobile = row.contact_details?.mobile_no ?? (row as any).contact_mobile ?? (row as any).contact?.mobile_no;
+                return mobile || "-";
+              }}
             />
 
             {/* 🔥 Toggle with FormData */}
