@@ -16,7 +16,7 @@ import "primeicons/primeicons.css";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { getEncryptedRoute } from "@/utils/routeCache";
 import { Switch } from "@/components/ui/switch";
-
+import { adminApi } from "@/helpers/admin";
 type UserType = {
  
   unique_id: string;
@@ -36,14 +36,20 @@ export default function UserTypePage() {
 
   const navigate = useNavigate();
   const { encAdmins, encUserType } = getEncryptedRoute();
+  const userTypeapi = adminApi.userTypes;
 
   const ENC_NEW_PATH = `/${encAdmins}/${encUserType}/new`;
   const ENC_EDIT_PATH = (unique_id: string) => `/${encAdmins}/${encUserType}/${unique_id}/edit`;
 
   const fetchUserTypes = async () => {
     try {
-      const res = await desktopApi.get("user-type/");
-      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      const res = await  userTypeapi.list();
+      const payload: any = res;
+      const data = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.data)
+        ? payload.data
+        : payload.data?.results ?? [];
       setUserTypes(data);
     } finally {
       setLoading(false);
@@ -67,7 +73,7 @@ export default function UserTypePage() {
 
     if (!confirmDelete.isConfirmed) return;
 
-    await desktopApi.delete(`user-type/${unique_id}/`);
+    await userTypeapi.remove(unique_id);
 
     Swal.fire({
       icon: "success",
@@ -112,7 +118,12 @@ export default function UserTypePage() {
 
   const statusTemplate = (row: UserType) => {
     const updateStatus = async (value: boolean) => {
-      await desktopApi.put(`user-type/${row.unique_id}/`, { is_active: value });
+     await userTypeapi.update(row.unique_id, {
+  name: row.name,         // correct field name
+  is_active: value,
+});
+
+      
       fetchUserTypes();
     };
 
