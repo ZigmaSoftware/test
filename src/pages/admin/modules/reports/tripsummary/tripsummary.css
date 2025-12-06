@@ -33,13 +33,17 @@
   border: none;
   border-radius: 12px;
   padding: 10px 16px;
-  background: #22c55e;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.trip-summary-header .btn-excel:hover {
+  opacity: 0.9;
 }
 
 .filter-row {
@@ -78,9 +82,13 @@
   border-radius: 10px;
   padding: 12px 28px;
   font-weight: 600;
-  background: #22c55e;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.btn-go:hover {
+  opacity: 0.9;
 }
 
 .summary-header {

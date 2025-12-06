@@ -60,6 +60,7 @@ const bloodGroupOptions = [
 ];
 
 const initialFormData = {
+  staff_unique_id: "",
   employee_name: "",
   // employee_id: "",
   doj: "",
@@ -132,6 +133,7 @@ export default function StaffCreationForm() {
         const staff = response.data;
         setFormData((prev) => ({
           ...prev,
+          staff_unique_id: staff.unique_id ?? staff.staff_unique_id ?? "",
           employee_name: staff.employee_name ?? "",
           // employee_id: staff.employee_id ?? "",
           doj: staff.doj ?? "",
@@ -169,10 +171,10 @@ export default function StaffCreationForm() {
           permanent_street: staff.permanent_address?.street ?? "",
           permanent_area: staff.permanent_address?.area ?? "",
           permanent_pincode: staff.permanent_address?.pincode ?? "",
-          contact_mobile: staff.contact_details?.mobile_no ?? "",
-          contact_email: staff.contact_details?.email_id ?? "",
-          emergency_contact: staff.contact_details?.emergency_contact ?? "",
-          emergency_mobile: staff.contact_details?.emergency_mobile ?? "",
+          contact_mobile: staff.contact_mobile ?? "",
+          contact_email: staff.contact_email ?? "",
+          emergency_contact: "",
+          emergency_mobile: "",
         }));
 
         if (staff.photo) {
@@ -369,6 +371,16 @@ export default function StaffCreationForm() {
 
   const renderOfficialSection = () => (
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+      <div>
+        <Label htmlFor="staff_unique_id">Staff ID (Auto-generated)</Label>
+        <Input
+          id="staff_unique_id"
+          value={formData.staff_unique_id}
+          readOnly
+          disabled
+          className="bg-gray-100 cursor-not-allowed"
+        />
+      </div>
       <div>
         <Label htmlFor="employee_name">Employee Name</Label>
         <Input

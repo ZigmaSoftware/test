@@ -21,6 +21,7 @@ import "primeicons/primeicons.css";
 export default function SubComplaintCategoryList() {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mainCatMap, setMainCatMap] = useState<Record<string, string>>({});
 
   const [globalFilterValue, setGlobalFilterValue] = useState("");
   const [filters, setFilters] = useState({
@@ -38,7 +39,8 @@ export default function SubComplaintCategoryList() {
   const fetchData = async () => {
     try {
       const res = await mobileAPI.get("sub-category/");
-      setRecords(res.data.data);
+      const data = res?.data?.data ?? res?.data?.results ?? res?.data ?? [];
+      setRecords(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error loading sub categories:", err);
     } finally {
@@ -48,6 +50,25 @@ export default function SubComplaintCategoryList() {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    mobileAPI
+      .get("main-category/")
+      .then((res) => {
+        const data = res?.data?.data ?? res?.data ?? [];
+        if (Array.isArray(data)) {
+          const map: Record<string, string> = {};
+          data.forEach((m: any) => {
+            const key = String(m.id ?? m.unique_id);
+            map[key] = m.main_categoryName || m.name;
+          });
+          setMainCatMap(map);
+        }
+      })
+      .catch(() => {
+        setMainCatMap({});
+      });
   }, []);
 
   const handleDelete = async (id: string) => {
@@ -76,8 +97,26 @@ export default function SubComplaintCategoryList() {
 
   const statusTemplate = (row: any) => {
     const updateStatus = async (value: boolean) => {
-      await mobileAPI.put(`sub-category/${row.unique_id}/`, { is_active: value });
-      fetchData();
+      const id = row.unique_id;
+      const prev = row.is_active;
+      // Optimistically update local state so row stays visible
+      setRecords((records) =>
+        records.map((r) => (r.unique_id === id ? { ...r, is_active: value } : r))
+      );
+
+      try {
+        await mobileAPI.patch(`sub-category/${id}/`, {
+          is_active: value,
+          name: row.name,
+          mainCategory: row.mainCategory,
+        });
+      } catch (err) {
+        console.error("Failed to update status:", err);
+        setRecords((records) =>
+          records.map((r) => (r.unique_id === id ? { ...r, is_active: prev } : r))
+        );
+        Swal.fire("Error", "Failed to update status", "error");
+      }
     };
     return <Switch checked={row.is_active} onCheckedChange={updateStatus} />;
   };
@@ -86,16 +125,16 @@ export default function SubComplaintCategoryList() {
     <div className="flex gap-3 justify-center">
       <button
         onClick={() => navigate(EDIT_PATH(row.unique_id))}
-        className="text-blue-600 hover:text-blue-800"
+        className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
       >
-        <PencilIcon className="size-5 fill-gray-600" />
+        <PencilIcon className="size-5" />
       </button>
 
       <button
         onClick={() => handleDelete(row.unique_id)}
-        className="text-red-600 hover:text-red-800"
+        className="inline-flex items-center justify-center text-red-600 hover:text-red-800"
       >
-        <TrashBinIcon className="size-5 fill-gray-600" />
+        <TrashBinIcon className="size-5" />
       </button>
     </div>
   );
@@ -110,6 +149,16 @@ export default function SubComplaintCategoryList() {
       global: { value, matchMode: FilterMatchMode.CONTAINS }
     });
   };
+
+  const renderMainCategory = (row: any) =>
+    row.mainCategory_name ||
+    row.main_categoryName ||
+    row.mainCategoryName ||
+    row.mainCategory?.main_categoryName ||
+    row.mainCategory?.name ||
+    mainCatMap[String(row.mainCategory)] ||
+    row.mainCategory ||
+    "-";
 
   const header = (
     <div className="flex justify-between items-center">
@@ -143,7 +192,7 @@ export default function SubComplaintCategoryList() {
           <Button
             label="Add New"
             icon="pi pi-plus"
-            className="p-button-success"
+            className="!bg-gradient-to-r !from-[#0f5bd8] !to-[#013E7E] !border-none !text-white hover:!opacity-90"
             onClick={() => navigate(NEW_PATH)}
           />
         </div>
@@ -165,7 +214,12 @@ export default function SubComplaintCategoryList() {
         >
           <Column header="S.No" body={indexTemplate} style={{ width: "80px" }} />
           <Column field="name" header="Sub Category" sortable />
-          <Column field="mainCategory_name" header="Main Category" sortable />
+          <Column
+            field="mainCategory_name"
+            header="Main Category"
+            sortable
+            body={renderMainCategory}
+          />
           <Column
             field="is_active"
             header="Status"

@@ -131,7 +131,11 @@ export function MainComplaintCategoryForm() {
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 mt-6">
-          <Button type="submit" disabled={loading}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded border-none hover:opacity-90 disabled:opacity-60 transition-colors"
+          >
             {loading
               ? isEdit
                 ? "Updating..."
@@ -139,11 +143,15 @@ export function MainComplaintCategoryForm() {
               : isEdit
                 ? "Update"
                 : "Save"}
-          </Button>
+          </button>
 
-          <Button type="button" variant="destructive" onClick={() => navigate(ENC_LIST_PATH)}>
+          <button
+            type="button"
+            onClick={() => navigate(ENC_LIST_PATH)}
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d] transition-colors"
+          >
             Cancel
-          </Button>
+          </button>
         </div>
       </form>
     </ComponentCard>

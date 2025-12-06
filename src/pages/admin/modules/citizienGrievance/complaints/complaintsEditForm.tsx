@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { desktopApi } from "@/api";
 import Swal from "sweetalert2";
 import ComponentCard from "@/components/common/ComponentCard";
 import Select from "@/components/form/Select";
 import Label from "@/components/form/Label";
-import { Input } from "@/components/ui/input";
+import Input from "@/components/form/input/InputField";
 import { getEncryptedRoute } from "@/utils/routeCache";
-import { adminApi } from "@/helpers/admin";
 
 const FILE_ICON =
   "https://cdn-icons-png.flaticon.com/512/337/337946.png";
-
-const complaintApi = adminApi.complaints;
 
 export default function ComplaintEditForm() {
   const { id } = useParams();
@@ -27,10 +25,13 @@ export default function ComplaintEditForm() {
 
   const [data, setData] = useState<any>(null);
 
+  useEffect(() => {
+    load();
+  }, []);
+
   const { encCitizenGrivence, encComplaint } = getEncryptedRoute();
 
   const ENC_LIST_PATH = `/${encCitizenGrivence}/${encComplaint}`;
-
 
   const isImageUrl = (url: string) => {
     const lower = url.toLowerCase();
@@ -45,24 +46,20 @@ export default function ComplaintEditForm() {
   const isImageFile = (f: File) =>
     f.type.startsWith("image/") || isImageUrl(f.name || "");
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return;
-      const c = await complaintApi.get(id);
+  const load = async () => {
+    const res = await desktopApi.get(`/complaints/${id}/`);
+    const c = res.data;
 
-      setData(c);
-      setStatus(c.status);
-      setRemarks(c.action_remarks || "");
+    setData(c);
+    setStatus(c.status);
+    setRemarks(c.action_remarks || "");
 
-      if (c.close_image_url) {
-        setPreviewUrl(isImageUrl(c.close_image_url) ? c.close_image_url : FILE_ICON);
-        setIsPreviewImage(isImageUrl(c.close_image_url));
-        setPreviewName(c.close_image_url.split("/").pop() || "file");
-      }
-    };
-
-    load();
-  }, [id]);
+    if (c.close_image_url) {
+      setPreviewUrl(isImageUrl(c.close_image_url) ? c.close_image_url : FILE_ICON);
+      setIsPreviewImage(isImageUrl(c.close_image_url));
+      setPreviewName(c.close_image_url.split("/").pop() || "file");
+    }
+  };
 
   const upload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -94,10 +91,7 @@ export default function ComplaintEditForm() {
     fd.append("action_remarks", remarks);
     if (closeFile) fd.append("close_image", closeFile);
 
-    if (!id) return;
-    await complaintApi.update(id, fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    await desktopApi.patch(`/complaints/${id}/`, fd);
     Swal.fire("Updated", "Complaint updated", "success");
     navigate(ENC_LIST_PATH);
   };
@@ -216,14 +210,14 @@ export default function ComplaintEditForm() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button className="bg-green-custom text-white px-4 py-2 rounded">
+          <button className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded">
             Update
           </button>
 
           <button
             type="button"
             onClick={() => navigate(ENC_LIST_PATH)}
-            className="bg-red-400 text-white px-4 py-2 rounded"
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d]"
           >
             Cancel
           </button>

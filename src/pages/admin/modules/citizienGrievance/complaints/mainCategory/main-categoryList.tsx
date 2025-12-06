@@ -78,8 +78,18 @@ export default function MainComplaintCategoryList() {
 
   const statusTemplate = (row: MainCategory) => {
     const updateStatus = async (value: boolean) => {
-      await mobileAPI.put(`main-category/${row.unique_id}/`, { is_active: value });
-      fetchData();
+      try {
+        const id = (row as any).unique_id ?? row.id;
+        await mobileAPI.patch(`main-category/${id}/`, {
+          main_categoryName: (row as any).main_categoryName,
+          is_active: value,
+        });
+        fetchData();
+      } catch (err) {
+        const data = (err as any)?.response?.data;
+        console.error("Status update failed:", data || err);
+        Swal.fire("Error", data?.detail || "Failed to update status", "error");
+      }
     };
     return <Switch checked={row.is_active} onCheckedChange={updateStatus} />;
   };
@@ -91,7 +101,7 @@ export default function MainComplaintCategoryList() {
         className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
         title="Edit"
       >
-        <PencilIcon className="fill-gray-500 size-5" />
+        <PencilIcon className="size-5" />
       </button>
 
       <button
@@ -99,7 +109,7 @@ export default function MainComplaintCategoryList() {
         className="inline-flex items-center justify-center text-red-600 hover:text-red-800"
         title="Delete"
       >
-        <TrashBinIcon className="fill-gray-500 size-5" />
+        <TrashBinIcon className="size-5" />
       </button>
     </div>
   );
@@ -145,7 +155,7 @@ export default function MainComplaintCategoryList() {
           <Button
             label="Add New"
             icon="pi pi-plus"
-            className="p-button-success"
+            className="!bg-gradient-to-r !from-[#0f5bd8] !to-[#013E7E] !border-none !text-white hover:!opacity-90"
             onClick={() => navigate(ENC_NEW_PATH)}
           />
         </div>

@@ -353,10 +353,8 @@ export default function MonthlyDistance(){
               />
             </div>
             <button type="button" className="md-excel-button" onClick={handleExport} disabled={!filteredRows.length}>
-              <span className="md-excel-icon" aria-hidden="true">
-                ⎘
-              </span>
-              Export
+              <span className="pi pi-download" aria-hidden="true" />
+              <span>Download</span>
             </button>
           </div>
         </div>

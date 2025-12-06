@@ -72,15 +72,18 @@
   border: none;
   border-radius: 12px;
   padding: 8px 16px;
-  background: #22c55e;      /* Main green */
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   font-weight: 600;
   display: inline-flex;
   gap: 6px;
   align-items: center;
   cursor: pointer;
-  transition: background 0.2s ease-in-out;
+  transition: opacity 0.2s ease-in-out;
   white-space: nowrap;
+}
+.md-excel-button:hover {
+  opacity: 0.9;
 }
 
 /* =================== FORM TOOLBAR =================== */
@@ -123,16 +126,20 @@
 /* =================== MATCH GO BUTTON WITH EXPORT =================== */
 .md-go-button {
   border: none !important;
-  background: #22c55e !important;  /* Same green as Export */
+  background: linear-gradient(90deg, #0f5bd8, #013E7E) !important;
   color: #fff !important;
   font-weight: 600;
-  border-radius: 12px !important;  /* Same roundness */
+  border-radius: 12px !important;
   padding: 8px 16px !important;
-  height: 34px !important;         /* Match export button height */
+  height: 34px !important;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: opacity 0.2s ease-in-out;
+}
+.md-go-button:hover {
+  opacity: 0.9;
 }
 
 /* =================== TABLE CARD =================== */

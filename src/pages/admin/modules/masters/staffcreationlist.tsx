@@ -19,6 +19,7 @@ type Staff = {
   id: number;
   employee_name: string;
   staff_unique_id: string;
+  unique_id?: string;
   designation?: string;
   doj?: string;
   site_name?: string;
@@ -59,6 +60,8 @@ export default function StaffCreationList() {
     `/${encMasters}/${encStaffCreation}/${id}/edit`;
 
   const globalFilterFields = [
+    "unique_id",
+    "staff_unique_id",
     "employee_name",
     "employee_id",
     "designation",
@@ -148,7 +151,7 @@ export default function StaffCreationList() {
       className="cursor-pointer flex justify-center"
       onClick={() => {
         const qrText = `
-Zigma ID: ${row.staff_unique_id}
+Zigma ID: ${row.unique_id ?? row.staff_unique_id}
 Name: ${row.employee_name}
 Designation: ${row.designation || "-"}
 Site: ${row.site_name || "-"}
@@ -328,9 +331,10 @@ Status: ${row.active_status ? "Active" : "Inactive"}
             className="p-datatable-sm"
           >
             <Column header="S.No" body={indexTemplate} style={{ width: 70 }} />
-            <Column field="staff_unique_id" header="Zigma ID" sortable
-              body={(row: Staff) => cap(row.staff_unique_id)}
-            
+            <Column
+              header="Zigma ID"
+              sortable
+              body={(row: Staff) => (row.unique_id ?? row.staff_unique_id ?? "-")}
             />
             <Column
               field="employee_name"

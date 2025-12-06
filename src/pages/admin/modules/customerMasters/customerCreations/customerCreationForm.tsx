@@ -222,12 +222,42 @@ function CustomerCreationForm() {
       return;
     }
 
-    // save
+    // save — map relational fields to backend's *_id names
     setLoading(true);
 
+    const toId = (v: any) => (v === null || v === undefined || v === "" ? null : Number(v));
+
+    const payload: any = {
+      customer_name,
+      contact_no,
+      building_no,
+      street,
+      area,
+      pincode,
+      latitude,
+      longitude,
+      id_proof_type,
+      id_no,
+      is_deleted: formData.is_deleted ?? false,
+      is_active: formData.is_active ?? true,
+      // relational fields mapped to backend expected names
+      ward_id: toId(ward),
+      zone_id: toId(zone),
+      city_id: toId(city),
+      district_id: toId(district),
+      state_id: toId(state),
+      country_id: toId(country),
+      property_id: toId(property),
+      sub_property_id: toId(sub_property),
+    };
+
     try {
+      // Debug: log payload sent to server
+      // eslint-disable-next-line no-console
+      console.log("Customer payload:", payload);
+
       if (isEdit) {
-        await desktopApi.put(`customercreations/${id}/`, formData);
+        await desktopApi.put(`customercreations/${id}/`, payload);
         Swal.fire({
           icon: "success",
           title: "Customer updated successfully!",
@@ -235,7 +265,7 @@ function CustomerCreationForm() {
           showConfirmButton: false,
         });
       } else {
-        await desktopApi.post("customercreations/", formData);
+        await desktopApi.post("customercreations/", payload);
         Swal.fire({
           icon: "success",
           title: "Customer added successfully!",
@@ -245,13 +275,24 @@ function CustomerCreationForm() {
       }
       navigate(ENC_LIST_PATH);
     } catch (error: any) {
+      // Log full error for debugging
+      // eslint-disable-next-line no-console
       console.error("Save failed:", error);
+      // Extract backend response (may contain field-level errors)
+      const serverData = error?.response?.data;
+      // eslint-disable-next-line no-console
+      console.error("Server response data:", serverData);
+
+      const pretty = serverData
+        ? typeof serverData === "string"
+          ? serverData
+          : JSON.stringify(serverData, null, 2)
+        : "Unknown server error";
+
       Swal.fire({
         icon: "error",
         title: "Save failed",
-        text:
-          error.response?.data?.detail ||
-          "Something went wrong while saving data.",
+        html: `<pre style="text-align:left;white-space:pre-wrap">${pretty}</pre>`,
       });
     } finally {
       setLoading(false);

@@ -56,8 +56,8 @@ export default function WasteCollectedDataList() {
     getEncryptedRoute();
 
   const ENC_NEW_PATH = `/${encWasteManagementMaster}/${encWasteCollectedData}/new`;
-  const ENC_EDIT_PATH = (id: number) =>
-    `/${encWasteManagementMaster}/${encWasteCollectedData}/${id}/edit`;
+  const ENC_EDIT_PATH = (uid: string) =>
+    `/${encWasteManagementMaster}/${encWasteCollectedData}/${uid}/edit`;
 
   const [globalFilterValue, setGlobalFilterValue] = useState("");
 
@@ -82,7 +82,7 @@ export default function WasteCollectedDataList() {
   }, []);
 
   // Delete Record
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (uid: string) => {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This wastecollection will be permanently deleted!",
@@ -96,7 +96,7 @@ export default function WasteCollectedDataList() {
     if (!confirm.isConfirmed) return;
 
     try {
-      await desktopApi.delete(`wastecollections/${id}/`);
+      await desktopApi.delete(`wastecollections/${uid}/`);
       Swal.fire({
         icon: "success",
         title: "Deleted successfully!",
@@ -141,11 +141,25 @@ export default function WasteCollectedDataList() {
   /* ------------------ NEW: TOGGLE STATUS ------------------ */
   const statusTemplate = (row: WasteCollection) => {
     const updateStatus = async (value: boolean) => {
+      const prev = row.is_active;
+      // optimistic update
+      setWasteCollectedDatas((items) =>
+        items.map((item) =>
+          item.id === row.id ? { ...item, is_active: value } : item
+        )
+      );
+
       try {
-        await desktopApi.put(`wastecollections/${row.id}/`, { is_active: value });
-        fetchWasteCollectedData();
+        await desktopApi.patch(`wastecollections/${row.unique_id}/`, { is_active: value });
       } catch (error) {
         console.error("Failed to update status", error);
+        // rollback on failure
+        setWasteCollectedDatas((items) =>
+          items.map((item) =>
+            item.id === row.id ? { ...item, is_active: prev } : item
+          )
+        );
+        Swal.fire("Error", "Failed to update status", "error");
       }
     };
 
@@ -160,7 +174,7 @@ export default function WasteCollectedDataList() {
   const actionTemplate = (row: WasteCollection) => (
     <div className="flex gap-3 justify-center">
       <button
-        onClick={() => navigate(ENC_EDIT_PATH(row.id))}
+        onClick={() => navigate(ENC_EDIT_PATH(row.unique_id))}
         className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
         title="Edit"
       >
@@ -168,7 +182,7 @@ export default function WasteCollectedDataList() {
       </button>
 
       <button
-        onClick={() => handleDelete(row.id)}
+        onClick={() => handleDelete(row.unique_id)}
         className="inline-flex items-center justify-center text-red-600 hover:text-red-800"
         title="Delete"
       >
@@ -199,7 +213,7 @@ export default function WasteCollectedDataList() {
           <Button
             label="Add New"
             icon="pi pi-plus"
-            className="p-button-success"
+            className="!bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] !border-none !text-white hover:opacity-90"
             onClick={() => navigate(ENC_NEW_PATH)}
           />
         </div>
@@ -224,7 +238,16 @@ export default function WasteCollectedDataList() {
         >
           <Column header="S.No" body={indexTemplate} style={{ width: "80px" }} />
 
-          <Column field="customer" header="Customer ID" sortable />
+          <Column
+            header="Customer ID"
+            sortable
+            body={(row: WasteCollection) =>
+              row.customer ??
+              (row as any).customer_id ??
+              (row as any).customer_unique_id ??
+              "-"
+            }
+          />
           <Column
             field="customer_name"
             header="Customer Name"

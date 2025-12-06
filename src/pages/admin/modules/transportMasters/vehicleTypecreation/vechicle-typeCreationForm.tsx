@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import { getEncryptedRoute } from "@/utils/routeCache";
@@ -6,11 +6,20 @@ import { adminApi } from "@/helpers/admin";
 
 const vehicleTypeApi = adminApi.vehicleTypes;
 
+type VehicleTypeRecord = {
+  unique_id?: string;
+  vehicleType: string;
+  description?: string;
+  is_active?: boolean;
+  is_delete?: boolean;
+};
+
 export default function VehicleTypeCreationForm() {
   const [vehicleType, setVehicleType] = useState("");
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [existingTypes, setExistingTypes] = useState<VehicleTypeRecord[]>([]);
   const navigate = useNavigate();
 
 
@@ -20,9 +29,24 @@ export default function VehicleTypeCreationForm() {
 
   const { id } = useParams();
   const isEdit = Boolean(id);
+  const resolveId = (item: VehicleTypeRecord) => item?.unique_id ?? "";
+  const hasLoadedRef = useRef(false);
 
   // Fetch existing record if editing
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+
+    vehicleTypeApi
+      .list()
+      .then((res) => {
+        const data = Array.isArray(res) ? res : (res as any)?.results || [];
+        setExistingTypes(data);
+      })
+      .catch(() => {
+        console.warn("Failed to load vehicle type list for duplicate check");
+      });
+
     if (isEdit) {
       vehicleTypeApi
         .get(id as string)
@@ -41,17 +65,35 @@ export default function VehicleTypeCreationForm() {
         });
     }
   }, [id, isEdit]);
-  console.log("Fetched vehicle type data:", { vehicleType, description, isActive });
+
   //  Submit logic
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const normalizedInput = vehicleType.trim().toLowerCase();
+    const duplicate = existingTypes.find((v) => {
+      const matchesName = v.vehicleType?.trim().toLowerCase() === normalizedInput;
+      const sameRecord = isEdit && resolveId(v) === id;
+      const deleted = v.is_delete === true;
+      return matchesName && !sameRecord && !deleted;
+    });
+
+    if (duplicate) {
+      Swal.fire({
+        icon: "error",
+        title: "Duplicate Vehicle Type",
+        text: `"${vehicleType}" already exists. Please use a different name.`,
+      });
+      return;
+    }
+
     setLoading(true);
 
     const payload = {
       vehicleType,
       description,
       is_active: isActive,
-      is_deleted: false,
+      is_delete: false,
     };
     console.log("Payload:", payload);
 
@@ -76,10 +118,14 @@ export default function VehicleTypeCreationForm() {
 
       navigate(ENC_LIST_PATH);
     } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        "Something went wrong!";
       Swal.fire({
         icon: "error",
-        title: "Duplicate Vehicle Type",
-        text: "Vehicle type name already exists!",
+        title: "Save Failed",
+        text: detail,
       });
     } finally {
       setLoading(false);
@@ -152,14 +198,14 @@ export default function VehicleTypeCreationForm() {
             <button
               type="submit"
               disabled={loading}
-              className="bg-green-600 text-white font-medium px-6 py-2 rounded hover:bg-green-700 transition disabled:opacity-50"
+              className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white font-medium px-6 py-2 rounded border-none hover:opacity-90 transition disabled:opacity-60"
             >
-              {loading ? "Saving..." : "Save"}
+              {loading ? (isEdit ? "Updating..." : "Saving...") : isEdit ? "Update" : "Save"}
             </button>
             <button
               type="button"
               onClick={() => navigate(ENC_LIST_PATH)}
-              className="bg-red-500 text-white font-medium px-6 py-2 rounded hover:bg-red-600 transition"
+              className="bg-[#cc4b4b] text-white font-medium px-6 py-2 rounded border-none hover:bg-[#b43d3d] transition"
             >
               Cancel
             </button>

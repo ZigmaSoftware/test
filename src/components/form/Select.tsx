@@ -48,8 +48,8 @@ export default function Select({
         <SelectValue placeholder={finalPlaceholder} />
       </SelectTrigger>
       <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={String(option.value)}>
+        {options.map((option, idx) => (
+          <SelectItem key={`${String(option.value ?? "opt")}-${idx}`} value={String(option.value)}>
             {option.label}
           </SelectItem>
         ))}

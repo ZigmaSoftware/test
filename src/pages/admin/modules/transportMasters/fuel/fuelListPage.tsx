@@ -168,7 +168,7 @@ export default function FuelList() {
           <Button
             label="Add Fuel"
             icon="pi pi-plus"
-            className="p-button-success"
+            className="!bg-gradient-to-r !from-[#0f5bd8] !to-[#013E7E] !border-none !text-white hover:!opacity-90"
             onClick={() => navigate(ENC_NEW_PATH)}
           />
         </div>

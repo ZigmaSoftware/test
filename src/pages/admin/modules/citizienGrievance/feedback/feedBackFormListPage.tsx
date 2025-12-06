@@ -17,6 +17,7 @@ import { getEncryptedRoute } from "@/utils/routeCache";
 
 import { Switch } from "@/components/ui/switch";
 import { adminApi } from "@/helpers/admin";
+import { desktopApi } from "@/api";
 
 type feedback = {
   unique_id: string;
@@ -131,11 +132,28 @@ export default function FeedBackFormList() {
   /* -------------------- NEW STATUS TOGGLE -------------------- */
   const statusTemplate = (row: feedback) => {
     const updateStatus = async (value: boolean) => {
+      const prev = row.is_active;
+      // Optimistic UI to keep row visible/consistent
+      setFeedbacks((items) =>
+        items.map((f) =>
+          f.unique_id === row.unique_id ? { ...f, is_active: value } : f
+        )
+      );
+
       try {
-        await feedbackApi.update(row.unique_id, { is_active: value });
-        fetchFeedbacks();
+        await desktopApi.patch(`feedbacks/${row.unique_id}/`, {
+          is_active: value,
+        });
+        // keep optimistic state; avoid refetch to prevent page blink
       } catch (error) {
         console.error("Failed to update status", error);
+        // rollback on failure
+        setFeedbacks((items) =>
+          items.map((f) =>
+            f.unique_id === row.unique_id ? { ...f, is_active: prev } : f
+          )
+        );
+        Swal.fire("Error", "Failed to update status", "error");
       }
     };
 
@@ -154,7 +172,7 @@ export default function FeedBackFormList() {
         className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
         title="Edit"
       >
-        <PencilIcon className="fill-gray-500 size-5" />
+        <PencilIcon className="size-5" />
       </button>
 
       <button
@@ -162,7 +180,7 @@ export default function FeedBackFormList() {
         className="inline-flex items-center justify-center text-red-600 hover:text-red-800"
         title="Delete"
       >
-        <TrashBinIcon className="fill-gray-500 size-5" />
+        <TrashBinIcon className="size-5" />
       </button>
     </div>
   );
@@ -189,7 +207,7 @@ export default function FeedBackFormList() {
           <Button
             label="Add New"
             icon="pi pi-plus"
-            className="p-button-success"
+            className="!bg-gradient-to-r !from-[#0f5bd8] !to-[#013E7E] !border-none !text-white hover:!opacity-90"
             onClick={() => navigate(ENC_NEW_PATH)}
           />
         </div>
@@ -217,7 +235,16 @@ export default function FeedBackFormList() {
         >
           <Column header="S.No" body={indexTemplate} style={{ width: "80px" }} />
 
-          <Column field="customer" header="Customer ID" sortable />
+          <Column
+            header="Customer ID"
+            sortable
+            body={(row: feedback) =>
+              row.customer ??
+              (row as any).customer_id ??
+              (row as any).customer_unique_id ??
+              "-"
+            }
+          />
 
           <Column
             field="customer_name"

@@ -177,7 +177,7 @@ function FuelForm() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-green-custom text-white px-4 py-2 rounded disabled:opacity-50 transition-colors"
+            className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded border-none hover:opacity-90 disabled:opacity-60 transition-colors"
           >
             {loading
               ? isEdit
@@ -190,7 +190,7 @@ function FuelForm() {
           <button
             type="button"
             onClick={() => navigate(ENC_LIST_PATH)}
-            className="bg-red-400 text-white px-4 py-2 rounded hover:bg-red-500"
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d] transition-colors"
           >
             Cancel
           </button>

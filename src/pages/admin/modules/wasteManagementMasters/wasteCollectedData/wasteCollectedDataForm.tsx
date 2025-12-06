@@ -345,7 +345,7 @@ function WasteCollectedForm() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-green-custom text-white px-4 py-2 rounded disabled:opacity-50 transition-colors"
+            className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded disabled:opacity-50 transition-opacity"
           >
             {loading
               ? isEdit
@@ -360,7 +360,7 @@ function WasteCollectedForm() {
             onClick={() =>
               navigate(ENC_LIST_PATH)
             }
-            className="bg-red-400 text-white px-4 py-2 rounded hover:bg-red-500"
+            className="bg-[#b51915] text-white px-4 py-2 rounded hover:opacity-90 transition-opacity"
           >
             Cancel
           </button>

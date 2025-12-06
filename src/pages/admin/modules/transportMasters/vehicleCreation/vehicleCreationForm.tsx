@@ -66,22 +66,17 @@ export default function VehicleCreationForm() {
   const resolveId = (item: any) => item?.unique_id ?? "";
 
   useEffect(() => {
-    Promise.all([vehicleTypeApi.list(), fuelTypeApi.list()])
-      .then(([vtypeRes, fuelRes]) => {
-        setVehicleTypes(vtypeRes);
-        setFuelTypes(fuelRes);
-      })
-      .catch(() => Swal.fire("Error", "Failed to load vehicle/fuel types", "error"));
+    const load = async () => {
+      try {
+        const [vtypeRes, fuelRes, stateRes] = await Promise.all([
+          vehicleTypeApi.list(),
+          fuelTypeApi.list(),
+          stateApi.list(),
+        ]);
 
-    stateApi
-      .list()
-      .then((res) => setStates(res))
-      .catch(() => Swal.fire("Error", "Failed to load states", "error"));
+        if (isEdit) {
+          const v = await vehicleApi.get(id as string);
 
-    if (isEdit) {
-      vehicleApi
-        .get(id as string)
-        .then(async (v) => {
           setVehicleNo(v.vehicle_no);
           setChaseNo(v.chase_no);
           setImeiNo(v.imei_no);
@@ -90,35 +85,48 @@ export default function VehicleCreationForm() {
           setVehicleType(String(v.vehicle_type));
           setFuelType(String(v.fuel_type));
 
-          setState(String(v.state_id ?? v.state ?? ""));
-          setDistrict(String(v.district_id ?? v.district ?? ""));
-          setCity(String(v.city_id ?? v.city ?? ""));
-          setZone(String(v.zone_id ?? v.zone ?? ""));
-          setWard(String(v.ward_id ?? v.ward ?? ""));
+          const currentState = String(v.state_id ?? v.state ?? "");
+          const currentDistrict = String(v.district_id ?? v.district ?? "");
+          const currentCity = String(v.city_id ?? v.city ?? "");
+          const currentZone = String(v.zone_id ?? v.zone ?? "");
+          const currentWard = String(v.ward_id ?? v.ward ?? "");
+
+          setState(currentState);
+          setDistrict(currentDistrict);
+          setCity(currentCity);
+          setZone(currentZone);
+          setWard(currentWard);
           setIsActive(v.is_active);
 
+          setVehicleTypes(filterActiveRecords(vtypeRes, [v.vehicle_type]));
+          setFuelTypes(filterActiveRecords(fuelRes, [v.fuel_type]));
+          setStates(filterActiveRecords(stateRes, currentState ? [currentState] : []));
+
           const distRes = await districtApi.list({ params: { state_id: v.state_id ?? v.state } });
-          setDistricts(distRes);
+          setDistricts(filterActiveRecords(distRes, currentDistrict ? [currentDistrict] : []));
 
           const cityRes = await cityApi.list({ params: { district_id: v.district_id ?? v.district } });
-          setCities(cityRes);
+          setCities(filterActiveRecords(cityRes, currentCity ? [currentCity] : []));
 
           const zoneRes = await zoneApi.list({ params: { city_id: v.city_id ?? v.city } });
-          setZones(zoneRes);
+          setZones(filterActiveRecords(zoneRes, currentZone ? [currentZone] : []));
 
           const wardRes = await wardApi.list({ params: { zone_id: v.zone_id ?? v.zone } });
-          setWards(wardRes);
+          setWards(filterActiveRecords(wardRes, currentWard ? [currentWard] : []));
+        } else {
+          setVehicleTypes(filterActiveRecords(vtypeRes));
+          setFuelTypes(filterActiveRecords(fuelRes));
+          setStates(filterActiveRecords(stateRes));
+        }
+      } catch (error) {
+        Swal.fire("Error", "Failed to load dropdown data", "error");
+      } finally {
+        setInitialLoad(false);
+      }
+    };
 
-          setInitialLoad(false);
-        })
-        .catch(() => Swal.fire("Error", "Failed to load vehicle details", "error"));
-    } else {
-      setInitialLoad(false);
-    }
-  }, [
-    id,
-    isEdit,
-  ]);
+    load();
+  }, [id, isEdit]);
 
   // ===============================
   // Cascading Logic – Safe for Edit
@@ -127,7 +135,9 @@ export default function VehicleCreationForm() {
   useEffect(() => {
     if (!state || initialLoad) return;
 
-    districtApi.list({ params: { state_id: state } }).then((res) => setDistricts(res));
+    districtApi
+      .list({ params: { state_id: state } })
+      .then((res) => setDistricts(filterActiveRecords(res, district ? [district] : [])));
 
     setDistrict("");
     setCity("");
@@ -141,7 +151,9 @@ export default function VehicleCreationForm() {
   useEffect(() => {
     if (!district || initialLoad) return;
 
-    cityApi.list({ params: { district_id: district } }).then((res) => setCities(res));
+    cityApi
+      .list({ params: { district_id: district } })
+      .then((res) => setCities(filterActiveRecords(res, city ? [city] : [])));
 
     setCity("");
     setZone("");
@@ -153,7 +165,9 @@ export default function VehicleCreationForm() {
   useEffect(() => {
     if (!city || initialLoad) return;
 
-    zoneApi.list({ params: { city_id: city } }).then((res) => setZones(res));
+    zoneApi
+      .list({ params: { city_id: city } })
+      .then((res) => setZones(filterActiveRecords(res, zone ? [zone] : [])));
 
     setZone("");
     setWard("");
@@ -163,7 +177,9 @@ export default function VehicleCreationForm() {
   useEffect(() => {
     if (!zone || initialLoad) return;
 
-    wardApi.list({ params: { zone_id: zone } }).then((res) => setWards(res));
+    wardApi
+      .list({ params: { zone_id: zone } })
+      .then((res) => setWards(filterActiveRecords(res, ward ? [ward] : [])));
 
     setWard("");
   }, [initialLoad, zone]);
@@ -381,7 +397,7 @@ export default function VehicleCreationForm() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-green-custom text-white px-4 py-2 rounded"
+            className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded border-none hover:opacity-90 disabled:opacity-60 transition-colors"
           >
             {loading ? (isEdit ? "Updating..." : "Saving...") : isEdit ? "Update" : "Save"}
           </button>
@@ -389,7 +405,7 @@ export default function VehicleCreationForm() {
           <button
             type="button"
             onClick={() => navigate(ENC_LIST_PATH)}
-            className="bg-red-400 text-white px-4 py-2 rounded"
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d] transition-colors"
           >
             Cancel
           </button>

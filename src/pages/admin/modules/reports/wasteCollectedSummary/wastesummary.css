@@ -46,10 +46,14 @@
   border: none;
   padding: 9px 18px;
   border-radius: 10px;
-  background: #22c55e;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.ws-go-button:hover {
+  opacity: 0.9;
 }
 
 /* ================= SEARCH + EXPORT ================= */
@@ -63,7 +67,7 @@
 .ws-export-button {
   border: none;
   border-radius: 14px;
-  background: #22c55e;
+  background: linear-gradient(90deg, #0f5bd8, #013E7E);
   color: #fff;
   font-weight: 600;
   font-size: 13px;
@@ -73,6 +77,11 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(56, 78, 154, 0.3);
+  gap: 8px;
+  transition: opacity 0.2s ease;
+}
+.ws-export-button:hover {
+  opacity: 0.9;
 }
 
 .ws-search {

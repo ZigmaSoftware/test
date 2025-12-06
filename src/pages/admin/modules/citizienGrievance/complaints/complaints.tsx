@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import { FileDown } from "lucide-react";
+import { FilterMatchMode } from "primereact/api";
+import { Column } from "primereact/column";
+import { DataTable } from "primereact/datatable";
+import type { DataTableFilterMeta } from "primereact/datatable";
+import { InputText } from "primereact/inputtext";
+import { Button } from "primereact/button";
 
+import { desktopApi, mobileAPI } from "@/api";
 import { PencilIcon } from "@/icons";
 import { getEncryptedRoute } from "@/utils/routeCache";
-import { adminApi } from "@/helpers/admin";
+
+import "primereact/resources/themes/lara-light-blue/theme.css";
+import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
 
 type Complaint = {
+  id: number;
   unique_id: string;
   customer_name: string;
   contact_no: string;
@@ -22,439 +32,401 @@ type Complaint = {
   action_remarks?: string;
   created: string;
   complaint_closed_at?: string | null;
+  mainCategory?: string | number;
+  subCategory?: string | number;
+  main_categoryName?: string;
+  sub_categoryName?: string;
 };
 
-const complaintApi = adminApi.complaints;
-
-const formatDT = (input: string | null | undefined) => {
-  if (!input) return "-";
-
-  const dt = new Date(input);
-  if (Number.isNaN(dt.getTime())) return "-";
-
-  const day = String(dt.getDate()).padStart(2, "0");
-  const month = String(dt.getMonth() + 1).padStart(2, "0");
-  const year = dt.getFullYear();
-
-  let hours = dt.getHours();
-  const minutes = String(dt.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-
-  hours = hours % 12 || 12;
-
-  return `${day}-${month}-${year} • ${hours}:${minutes} ${ampm}`;
-};
-
-const statusBadgeClass = (status?: string) => {
-  const normalized = (status || "").toUpperCase();
-
-  if (["CLOSED", "RESOLVED"].includes(normalized)) {
-    return "border-green-200 bg-green-50 text-green-700";
-  }
-
-  if (
-    normalized.includes("PROGRESS") ||
-    normalized.includes("ACTION") ||
-    normalized.includes("WORK")
-  ) {
-    return "border-indigo-200 bg-indigo-50 text-indigo-700";
-  }
-
-  if (normalized.includes("PEND")) {
-    return "border-yellow-200 bg-yellow-50 text-yellow-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-};
-
-const isImage = (url: string) => {
-  const lower = url.toLowerCase();
-  return [".jpg", ".jpeg", ".png", ".webp", ".gif"].some((ext) =>
-    lower.endsWith(ext)
-  );
-};
-
-const renderPreview = (src: string | undefined, size = "w-28 h-16") => {
-  if (!src) return "-";
-
-  if (isImage(src)) {
-    return (
-      <img
-        src={src}
-        className={`${size} rounded-md border object-cover shadow-sm`}
-        alt="complaint"
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`${size} border rounded-md flex items-center justify-center bg-gray-50`}
-    >
-      <FileDown className="h-5 w-5 text-gray-500" />
-    </div>
-  );
-};
-
-const cap = (str?: string) =>
-  str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
+const FILE_ICON =
+  "https://cdn-icons-png.flaticon.com/512/337/337946.png";
 
 export default function ComplaintsList() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [mainCategories, setMainCategories] = useState<any[]>([]);
+  const [subCategories, setSubCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalImage, setModalImage] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [expandedRows, setExpandedRows] = useState<any>(null);
+  const [globalFilterValue, setGlobalFilterValue] = useState("");
+  const [filters, setFilters] = useState<DataTableFilterMeta>({
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+  });
 
   const navigate = useNavigate();
   const { encCitizenGrivence, encComplaint } = getEncryptedRoute();
 
   const ENC_NEW_PATH = `/${encCitizenGrivence}/${encComplaint}/new`;
-  const ENC_EDIT_PATH = (id: string) =>
-    `/${encCitizenGrivence}/${encComplaint}/${id}/edit`;
+  const ENC_EDIT_PATH = (id: number) => `/${encCitizenGrivence}/${encComplaint}/${id}/edit`;
 
-  const fetchComplaints = useCallback(async () => {
+  const fetchData = async () => {
     try {
-      setLoading(true);
-      const data = await complaintApi.list();
-      setComplaints(data);
+      const res = await desktopApi.get("/complaints/");
+      setComplaints(res.data);
     } catch {
       Swal.fire("Error", "Unable to load complaints", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchComplaints();
-  }, [fetchComplaints]);
+    fetchData();
+  }, []);
 
-  const statusOptions = useMemo(() => {
-    const set = new Set<string>();
-    complaints.forEach((item) => {
-      if (item.status) {
-        set.add(item.status);
-      }
-    });
-    return ["ALL", ...Array.from(set)];
-  }, [complaints]);
+  const fetchCategories = async () => {
+    try {
+      const [mainRes, subRes] = await Promise.all([
+        mobileAPI.get("main-category/"),
+        mobileAPI.get("sub-category/"),
+      ]);
 
-  const summaryCards = useMemo(() => {
-    const buckets = {
-      open: 0,
-      pending: 0,
-      inProgress: 0,
-      closed: 0,
-    };
+      const mains = Array.isArray(mainRes.data)
+        ? mainRes.data
+        : mainRes.data?.data || [];
+      const subs = Array.isArray(subRes.data)
+        ? subRes.data
+        : subRes.data?.data || [];
 
-    complaints.forEach((item) => {
-      const normalized = (item.status || "").toUpperCase();
+      setMainCategories(
+        mains.filter((m: any) => m.is_delete !== true && m.is_active !== false)
+      );
+      setSubCategories(
+        subs.filter((s: any) => s.is_delete !== true && s.is_active !== false)
+      );
+    } catch (err) {
+      console.error("Failed to load categories:", err);
+    }
+  };
 
-      if (["CLOSED", "RESOLVED"].includes(normalized)) {
-        buckets.closed += 1;
-        return;
-      }
-      if (
-        normalized.includes("PROGRESS") ||
-        normalized.includes("ACTION") ||
-        normalized.includes("WORK")
-      ) {
-        buckets.inProgress += 1;
-        return;
-      }
-      if (normalized.includes("PEND")) {
-        buckets.pending += 1;
-        return;
-      }
-      buckets.open += 1;
-    });
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
-    return [
-      {
-        label: "Total Complaints",
-        value: complaints.length,
-        helper: "Across all statuses",
-        accent: "from-sky-500 to-indigo-500",
-      },
-      {
-        label: "Open / Pending",
-        value: buckets.open + buckets.pending,
-        helper: `${buckets.open} open • ${buckets.pending} pending`,
-        accent: "from-orange-400 to-amber-500",
-      },
-      {
-        label: "In Progress",
-        value: buckets.inProgress,
-        helper: "Work in progress",
-        accent: "from-purple-500 to-fuchsia-500",
-      },
-      {
-        label: "Closed",
-        value: buckets.closed,
-        helper: "Resolved & closed",
-        accent: "from-emerald-500 to-green-600",
-      },
-    ];
-  }, [complaints]);
+  const formatDT = (d: string | null | undefined) => {
+    if (!d) return "-";
 
-  const filteredComplaints = useMemo(() => {
-    const normalizedFilter = statusFilter === "ALL" ? null : statusFilter;
-    const term = searchTerm.trim().toLowerCase();
+    const dt = new Date(d);
 
-    const matchesTerm = (value?: string) =>
-      term === "" ? true : value?.toLowerCase().includes(term);
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
 
-    return complaints
-      .filter((complaint) => {
-        const statusMatches = normalizedFilter
-          ? (complaint.status || "") === normalizedFilter
-          : true;
+    let hours = dt.getHours();
+    const minutes = String(dt.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
 
-        if (!term) {
-          return statusMatches;
-        }
+    hours = hours % 12;
+    hours = hours ? hours : 12;
 
-        const textHaystack = [
-          complaint.unique_id,
-          complaint.customer_name,
-          complaint.contact_no,
-          complaint.zone_name,
-          complaint.ward_name,
-          complaint.address,
-          complaint.category,
-          complaint.status,
-          complaint.details,
-        ];
+    return (
+      <>
+        {`${day}-${month}-${year}`}
+        <br />
+        {`${hours}.${minutes} ${ampm}`}
+      </>
+    );
+  };
 
-        return (
-          statusMatches && textHaystack.some((field) => matchesTerm(field))
-        );
-      })
-      .sort((a, b) => {
-        const first = new Date(b.created).getTime();
-        const second = new Date(a.created).getTime();
-        return first - second;
-      });
-  }, [complaints, searchTerm, statusFilter]);
+  const isImage = (url: string) => {
+    const lower = url.toLowerCase();
+    return (
+      lower.endsWith(".jpg") ||
+      lower.endsWith(".jpeg") ||
+      lower.endsWith(".png") ||
+      lower.endsWith(".webp")
+    );
+  };
 
   const openFile = (fileUrl: string) => {
     if (!fileUrl) return;
 
     if (isImage(fileUrl)) {
       setModalImage(fileUrl);
-      return;
+    } else {
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
     }
-
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
-  const handleResetFilters = () => {
-    setSearchTerm("");
-    setStatusFilter("ALL");
+  const cap = (str?: string) =>
+    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
+
+  const extractFromDetails = (
+    details: string | undefined,
+    label: "Main" | "Sub"
+  ) => {
+    if (!details) return "";
+
+    const parts = details.split("|").map((p) => p.trim());
+    const match = parts.find((p) =>
+      p.toLowerCase().startsWith(`${label.toLowerCase()}:`)
+    );
+
+    if (!match) return "";
+
+    const [, value] = match.split(":");
+    return value?.trim() || "";
   };
 
-  return (
-    <div className="space-y-6 px-2 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm uppercase tracking-wide text-gray-500">
-            Citizen Grievance
-          </p>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Complaints Overview
-          </h1>
+  const getMainCategoryName = (row: Complaint) => {
+    const r: any = row;
+    const mainName =
+      r.main_categoryName ||
+      r.mainCategoryName ||
+      r.main_category_name ||
+      r.mainCategory_name;
+
+    const mainId = r.mainCategory ?? r.main_category ?? r.main_category_id;
+    const mainFromList = mainCategories.find(
+      (m: any) => String(m.id) === String(mainId)
+    );
+
+    return (
+      mainName ||
+      mainFromList?.main_categoryName ||
+      mainFromList?.name ||
+      extractFromDetails(r.details, "Main") ||
+      ""
+    );
+  };
+
+  const getSubCategoryName = (row: Complaint) => {
+    const r: any = row;
+    const subName =
+      r.sub_categoryName ||
+      r.subCategoryName ||
+      r.sub_category_name ||
+      r.subCategory_name;
+
+    const subId = r.subCategory ?? r.sub_category ?? r.sub_category_id;
+    const subFromList = subCategories.find(
+      (s: any) => String(s.id) === String(subId)
+    );
+
+    return (
+      subName ||
+      subFromList?.name ||
+      extractFromDetails(r.details, "Sub") ||
+      ""
+    );
+  };
+
+  const categoryTemplate = (row: Complaint) => {
+    const mainName = getMainCategoryName(row);
+    const subName = getSubCategoryName(row);
+
+    if (mainName && subName) return `${mainName} / ${subName}`;
+    if (mainName) return mainName;
+    if (subName) return subName;
+
+    return cap(row.category) || "-";
+  };
+
+  const descriptionTemplate = (row: Complaint) => {
+    const parts = (row.details || "")
+      .split("|")
+      .map((p) => p.trim())
+      .filter(
+        (p) =>
+          p &&
+          !p.toLowerCase().startsWith("main:") &&
+          !p.toLowerCase().startsWith("sub:")
+      );
+
+    if (!parts.length) return "-";
+    return parts.join(" | ");
+  };
+
+  const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFilters({
+      ...filters,
+      global: { value, matchMode: FilterMatchMode.CONTAINS },
+    });
+    setGlobalFilterValue(value);
+  };
+
+  const tableHeader = (
+    <div className="flex justify-end w-full">
+      <div className="flex items-center gap-3 bg-white px-3 py-1 rounded-md border border-gray-300 shadow-sm">
+        <i className="pi pi-search text-gray-500" />
+        <InputText
+          value={globalFilterValue}
+          onChange={onGlobalFilterChange}
+          placeholder="Search complaints..."
+          className="p-inputtext-sm !border-0 !shadow-none"
+        />
+      </div>
+    </div>
+  );
+
+  const rowExpansionTemplate = (data: Complaint) => (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+      <div className="flex flex-col gap-2 md:flex-row">
+        <div className="w-full md:w-1/4 font-semibold">Close Image :</div>
+        <div className="space-y-2">
+          {data.close_image_url ? (
+            <button onClick={() => openFile(data.close_image_url!)}>
+              <img
+                src={
+                  isImage(data.close_image_url!)
+                    ? data.close_image_url!
+                    : FILE_ICON
+                }
+                className="w-40 h-20 rounded border object-cover"
+              />
+            </button>
+          ) : (
+            "-"
+          )}
         </div>
-
-        <button
-          className="rounded-lg bg-green-custom px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-95"
-          onClick={() => navigate(ENC_NEW_PATH)}
-        >
-          + Add Complaint
-        </button>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map((card) => (
-          <article
-            key={card.label}
-            className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-          >
-            <div className={`h-1.5 bg-gradient-to-r ${card.accent}`} />
-            <div className="p-4">
-              <p className="text-sm text-gray-500">{card.label}</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {card.value}
-              </p>
-              <p className="text-xs text-gray-500">{card.helper}</p>
-            </div>
-          </article>
-        ))}
-      </section>
+      <div className="flex flex-col gap-2 md:flex-row">
+        <div className="w-full md:w-1/4 font-semibold">Action Remarks :</div>
+        <div>{data.action_remarks || "-"}</div>
+      </div>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by CG no, customer, phone, or location"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm shadow-sm focus:border-green-custom focus:outline-none"
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">
-                {filteredComplaints.length} shown
-              </span>
-            </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="min-w-[160px] rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-green-custom focus:outline-none"
-            >
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === "ALL" ? "All Status" : cap(option)}
-                </option>
-              ))}
-            </select>
-          </div>
-
+      {data.status !== "CLOSED" && (
+        <div className="flex justify-start">
+          <div className="w-full md:w-1/4 font-semibold">Action :</div>
           <button
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-gray-400"
-            onClick={handleResetFilters}
+            className="text-blue-600 flex items-center gap-2 border px-4 py-1 rounded"
+            onClick={() => navigate(ENC_EDIT_PATH(data.id))}
           >
-            Reset
+            <PencilIcon className="size-5" />
           </button>
         </div>
-      </section>
-
-      {loading ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-gray-500">
-          Fetching complaints...
-        </div>
-      ) : filteredComplaints.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
-          <p className="text-lg font-semibold text-gray-700">
-            No complaints found
-          </p>
-          <p className="text-sm text-gray-500">
-            Adjust your search or status filters to see more results.
-          </p>
-        </div>
-      ) : (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredComplaints.map((item) => (
-            <article
-              key={item.unique_id}
-              className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-dashed pb-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-gray-500">
-                    {item.unique_id}
-                  </p>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {item.customer_name || "Anonymous"}
-                  </h2>
-                  <p className="text-sm text-gray-500 flex items-center gap-2">
-                    <span>{cap(item.category)}</span>
-                    <span className="text-gray-300">•</span>
-                    <span>{item.contact_no || "N/A"}</span>
-                  </p>
-                </div>
-
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(
-                    item.status
-                  )}`}
-                >
-                  {cap(item.status)}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 text-sm text-gray-600 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Location
-                  </p>
-                  <p>{item.address || "-"}</p>
-                  <p className="text-xs text-gray-500">
-                    {item.zone_name} / {item.ward_name}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Details
-                  </p>
-                  <p className="text-gray-700">{item.details || "-"}</p>
-                </div>
-
-                {item.action_remarks && (
-                  <div className="sm:col-span-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      Action Remarks
-                    </p>
-                    <p className="text-gray-700">{item.action_remarks}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                <button
-                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-gray-600 transition hover:border-gray-300"
-                  onClick={() => openFile(item.image_url || "")}
-                  disabled={!item.image_url}
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wide">
-                    Complaint Proof
-                  </span>
-                </button>
-                <button
-                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-gray-600 transition hover:border-gray-300"
-                  onClick={() => openFile(item.close_image_url || "")}
-                  disabled={!item.close_image_url}
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wide">
-                    Closure Proof
-                  </span>
-                </button>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-dashed pt-3 text-xs text-gray-500">
-                <div>
-                  <p>Created: {formatDT(item.created)}</p>
-                  <p>
-                    Closed: {item.complaint_closed_at ? formatDT(item.complaint_closed_at) : "-"}
-                  </p>
-                </div>
-
-                {item.status !== "CLOSED" && (
-                  <button
-                    className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400"
-                    onClick={() => navigate(ENC_EDIT_PATH(item.unique_id))}
-                  >
-                    <PencilIcon className="size-4" />
-                    Update
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
-        </section>
       )}
+    </div>
+  );
+
+  const indexTemplate = (_: Complaint, options: { rowIndex?: number }) =>
+    (options.rowIndex ?? 0) + 1;
+
+  const imageTemplate = (row: Complaint) => (
+    <div className="text-center">
+      {row.image_url ? (
+        <button onClick={() => openFile(row.image_url!)}>
+          <img
+            src={isImage(row.image_url!) ? row.image_url! : FILE_ICON}
+            className="w-28 h-16 object-cover rounded border"
+          />
+        </button>
+      ) : (
+        "-"
+      )}
+    </div>
+  );
+
+  const closureTemplate = (row: Complaint) => (
+    <div className="flex flex-col text-sm">
+      <span>{formatDT(row.complaint_closed_at)}</span>
+      <span className="font-semibold text-gray-700">{row.status}</span>
+    </div>
+  );
+
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  return (
+    <div className="p-6 flex justify-center">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-full">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">Complaints</h1>
+            <p className="text-gray-500 text-sm">
+              Manage all citizen grievance complaints
+            </p>
+          </div>
+
+          <Button
+            label="Add Complaint"
+            icon="pi pi-plus"
+            className="!bg-gradient-to-r !from-[#0f5bd8] !to-[#013E7E] !border-none !text-white hover:!opacity-90"
+            onClick={() => navigate(ENC_NEW_PATH)}
+          />
+        </div>
+
+        <div className="rounded-lg p-3">
+          <DataTable
+            value={complaints}
+            dataKey="id"
+            paginator
+            rows={10}
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            filters={filters}
+            globalFilterFields={[
+              "unique_id",
+              "customer_name",
+              "contact_no",
+              "category",
+              "main_categoryName",
+              "sub_categoryName",
+              "mainCategoryName",
+              "subCategoryName",
+              "zone_name",
+              "ward_name",
+              "address",
+              "status",
+            ]}
+            header={tableHeader}
+            emptyMessage="No complaints found."
+            responsiveLayout="scroll"
+            className="p-datatable-sm"
+            expandedRows={expandedRows}
+            onRowToggle={(e) => setExpandedRows(e.data)}
+            rowExpansionTemplate={rowExpansionTemplate}
+            showGridlines
+            stripedRows
+          >
+            <Column expander style={{ width: "3rem" }} />
+            <Column header="S.No" body={indexTemplate} style={{ width: "90px" }} />
+            <Column
+              header="Comp Created"
+              body={(row: Complaint) => formatDT(row.created)}
+              style={{ minWidth: "160px" }}
+            />
+            <Column
+              field="unique_id"
+              header="CG No"
+              sortable
+              style={{ minWidth: "140px" }}
+            />
+            <Column
+              field="contact_no"
+              header="Comp Ph No"
+              sortable
+              style={{ minWidth: "140px" }}
+            />
+            <Column
+              header="Main / Sub Category"
+              body={categoryTemplate}
+              style={{ minWidth: "160px" }}
+            />
+            <Column
+              header="Zone / Ward"
+              body={(row: Complaint) => `${row.zone_name}/${row.ward_name}`}
+              style={{ minWidth: "140px" }}
+            />
+            <Column field="address" header="Location" />
+            <Column header="Description" body={descriptionTemplate} />
+            <Column header="Image" body={imageTemplate} />
+            <Column header="Comp Closure / Status" body={closureTemplate} />
+          </DataTable>
+        </div>
+      </div>
 
       {modalImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
-          <div className="relative max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 backdrop-blur-sm flex justify-center items-center z-50">
+          <div className="bg-white p-4 rounded shadow relative">
             <button
-              className="absolute right-3 top-3 rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white"
+              className="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded"
               onClick={() => setModalImage(null)}
             >
-              Close
+              X
             </button>
-            {renderPreview(modalImage, "w-[520px] h-[320px]")}
+
+            <img src={modalImage} className="w-[400px] h-[400px] rounded" />
           </div>
         </div>
       )}

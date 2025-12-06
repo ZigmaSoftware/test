@@ -1,31 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { desktopApi, mobileAPI } from "@/api";
 import Swal from "sweetalert2";
 import ComponentCard from "@/components/common/ComponentCard";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import Select from "@/components/form/Select";
+import Label from "@/components/form/Label";
+import Input from "@/components/form/input/InputField";
 import { getEncryptedRoute } from "@/utils/routeCache";
-import {
-  filterActiveCustomers,
-  normalizeCustomerArray,
-} from "@/utils/customerUtils";
-import { adminApi } from "@/helpers/admin";
 
 const FILE_ICON =
   "https://cdn-icons-png.flaticon.com/512/337/337946.png"; // fallback for pdf/doc
-
-const customerApi = adminApi.customerCreations;
-const zoneApi = adminApi.zones;
-const wardApi = adminApi.wards;
-const complaintApi = adminApi.complaints;
 
 export default function ComplaintAddForm() {
   const navigate = useNavigate();
@@ -33,16 +17,21 @@ export default function ComplaintAddForm() {
   const { encCitizenGrivence, encComplaint } = getEncryptedRoute();
 
   const ENC_LIST_PATH = `/${encCitizenGrivence}/${encComplaint}`;
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [customer, setCustomer] = useState<any>(null);
   const [zones, setZones] = useState<any[]>([]);
   const [wards, setWards] = useState<any[]>([]);
+  const [mainCategories, setMainCategories] = useState<any[]>([]);
+  const [allSubCategories, setAllSubCategories] = useState<any[]>([]);
+  const [filteredSubCategories, setFilteredSubCategories] = useState<any[]>([]);
 
   const [zone, setZone] = useState("");
   const [ward, setWard] = useState("");
   const [contact, setContact] = useState("");
   const [address, setAddress] = useState("");
-  const [category, setCategory] = useState("");
+  const [mainCategory, setMainCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
   const [details, setDetails] = useState("");
 
   const [file, setFile] = useState<File | null>(null);
@@ -51,9 +40,8 @@ export default function ComplaintAddForm() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await customerApi.list();
-      const normalized = normalizeCustomerArray(res);
-      setCustomers(filterActiveCustomers(normalized));
+      const res = await desktopApi.get("/customercreations/");
+      setCustomers(res.data || []);
     } catch (err) {
       console.error("Failed to fetch customers:", err);
     }
@@ -63,26 +51,113 @@ export default function ComplaintAddForm() {
     fetchCustomers();
   }, []);
 
-  const loadZones = async (cid: string) => {
-    const res = await zoneApi.list({ params: { customer: cid } });
-    setZones(res);
+  const fetchCategories = async () => {
+    try {
+      const [mainRes, subRes] = await Promise.all([
+        mobileAPI.get("main-category/"),
+        mobileAPI.get("sub-category/"),
+      ]);
+
+      const mains = Array.isArray(mainRes.data)
+        ? mainRes.data
+        : mainRes.data?.data || [];
+      const subs = Array.isArray(subRes.data)
+        ? subRes.data
+        : subRes.data?.data || [];
+
+      setMainCategories(
+        mains.filter((m: any) => m.is_delete !== true && m.is_active !== false)
+      );
+      setAllSubCategories(
+        subs.filter((s: any) => s.is_delete !== true && s.is_active !== false)
+      );
+    } catch (err) {
+      console.error("Failed to fetch categories:", err);
+    }
   };
 
-  const loadWards = async (zid: string) => {
-    const res = await wardApi.list({ params: { zone: zid } });
-    setWards(res);
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    if (!mainCategory) {
+      setFilteredSubCategories([]);
+      setSubCategory("");
+      return;
+    }
+
+    const matchingSubs = allSubCategories.filter(
+      (s: any) => String(s.mainCategory) === String(mainCategory)
+    );
+
+    setFilteredSubCategories(matchingSubs);
+
+    const hasSelected = matchingSubs.some(
+      (s: any) => String(s.id) === String(subCategory)
+    );
+    if (!hasSelected) setSubCategory("");
+  }, [mainCategory, allSubCategories, subCategory]);
+
+  const loadZones = async (cid: number, currentZoneId?: string) => {
+    const res = await desktopApi.get(`/zones/?customer=${cid}`);
+    const list = res.data || [];
+    setZones(list);
+
+    if (currentZoneId) {
+      const exists = list.some((z: any) => String(z.id) === String(currentZoneId));
+      if (!exists) setZone("");
+    }
   };
 
-  const resolveId = (item: any) => item?.unique_id ?? "";
+  const loadWards = async (zid: number, preselectWardId?: string) => {
+    const res = await desktopApi.get(`/wards/?zone=${zid}`);
+    const list = res.data || [];
+    setWards(list);
+
+    if (preselectWardId) {
+      const found = list.some((w: any) => String(w.id) === String(preselectWardId));
+      setWard(found ? String(preselectWardId) : "");
+    } else {
+      setWard("");
+    }
+  };
 
   const onCustomerChange = (id: string) => {
-    const c = customers.find((x) => resolveId(x) === id);
+    const c = customers.find((x) => String(x.id) === String(id));
     setCustomer(c);
-    setContact(c.contact_no);
+    setContact(c?.contact_no || "");
     setAddress(
-      `${c.building_no}, ${c.street}, ${c.area}, ${c.city_name}, ${c.district_name}, ${c.state_name}, ${c.pincode}`
+      c
+        ? [
+            c.building_no,
+            c.street,
+            c.area,
+            c.city_name,
+            c.district_name,
+            c.state_name,
+            c.pincode,
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : ""
     );
-    loadZones(resolveId(c));
+
+    const zoneId = c?.zone || c?.zone_id || c?.zoneId;
+    const wardId = c?.ward || c?.ward_id || c?.wardId;
+
+    setZone(zoneId ? String(zoneId) : "");
+    setWard(wardId ? String(wardId) : "");
+
+    if (c?.id) {
+      loadZones(c.id, zoneId ? String(zoneId) : undefined);
+    }
+
+    if (zoneId) {
+      loadWards(Number(zoneId), wardId ? String(wardId) : undefined);
+    } else {
+      setWards([]);
+    }
   };
 
   const isImageFile = (f: File) =>
@@ -96,7 +171,6 @@ export default function ComplaintAddForm() {
     const f = e.target.files?.[0];
     if (!f) return;
 
-    // revoke old blob
     if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
 
     setFile(f);
@@ -124,20 +198,49 @@ export default function ComplaintAddForm() {
   const save = async (e: any) => {
     e.preventDefault();
 
+    if (!customer) {
+      Swal.fire("Missing data", "Please select a customer.", "warning");
+      return;
+    }
+
+    if (!mainCategory || !subCategory) {
+      Swal.fire("Missing data", "Please select main and sub category.", "warning");
+      return;
+    }
+
+    const selectedMain = mainCategories.find(
+      (m: any) => String(m.id) === String(mainCategory)
+    );
+    const selectedSub = filteredSubCategories.find(
+      (s: any) => String(s.id) === String(subCategory)
+    );
+
+    const detailParts = [
+      selectedMain ? `Main: ${selectedMain.main_categoryName || selectedMain.name}` : "",
+      selectedSub ? `Sub: ${selectedSub.name}` : "",
+      details || "",
+    ].filter(Boolean);
+
     const fd = new FormData();
-    fd.append("customer", resolveId(customer));
-    fd.append("zone", zone);
-    fd.append("ward", ward);
+    fd.append("customer", String(customer.id));
+    if (zone) fd.append("zone", String(zone));
+    if (ward) fd.append("ward", String(ward));
     fd.append("contact_no", contact);
     fd.append("address", address);
-    fd.append("category", category);
-    fd.append("details", details);
+    fd.append(
+      "main_category",
+      selectedMain ? selectedMain.main_categoryName || selectedMain.name : ""
+    );
+    fd.append(
+      "sub_category",
+      selectedSub ? selectedSub.name : ""
+    );
+    fd.append("category", "OTHER"); // backend requires category
+    fd.append("details", detailParts.join(" | "));
     if (file) fd.append("image", file);
 
     try {
-      await complaintApi.create(fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await desktopApi.post("/complaints/", fd);
       Swal.fire("Saved", "Complaint created successfully", "success");
       navigate(ENC_LIST_PATH);
     } catch {
@@ -149,24 +252,17 @@ export default function ComplaintAddForm() {
     <ComponentCard title="Add Complaint">
       <form onSubmit={save}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
           <div>
             <Label>Customer *</Label>
             <Select
-              value={customer ? resolveId(customer) : undefined}
-              onValueChange={onCustomerChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((c) => (
-                  <SelectItem key={resolveId(c)} value={resolveId(c)}>
-                    {c.customer_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              value={customer?.id ? String(customer.id) : ""}
+              required
+              onChange={onCustomerChange}
+              options={customers.map((c) => ({
+                value: String(c.id),
+                label: c.customer_name,
+              }))}
+            />
           </div>
 
           <div>
@@ -182,59 +278,54 @@ export default function ComplaintAddForm() {
           <div>
             <Label>Zone *</Label>
             <Select
-              value={zone || undefined}
-              onValueChange={(v) => {
+              required
+              value={zone}
+              disabled
+              onChange={(v) => {
                 setZone(v);
-                loadWards(v);
+                loadWards(Number(v));
               }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select zone" />
-              </SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => (
-                  <SelectItem key={resolveId(z)} value={resolveId(z)}>
-                    {z.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={zones.map((z) => ({ value: String(z.id), label: z.name }))}
+            />
           </div>
 
           <div>
             <Label>Ward *</Label>
-            <Select value={ward || undefined} onValueChange={(v) => setWard(v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select ward" />
-              </SelectTrigger>
-              <SelectContent>
-                {wards.map((w) => (
-                  <SelectItem key={resolveId(w)} value={resolveId(w)}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Select
+              required
+              value={ward}
+              disabled
+              onChange={(v) => setWard(v)}
+              options={wards.map((w) => ({ value: String(w.id), label: w.name }))}
+            />
           </div>
 
           <div>
-            <Label>Category *</Label>
+            <Label>Main Category *</Label>
             <Select
-              value={category || undefined}
-              onValueChange={(v) => setCategory(v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="COLLECTION">Collection</SelectItem>
-                <SelectItem value="TRANSPORT">Transport</SelectItem>
-                <SelectItem value="SEGREGATION">Segregation</SelectItem>
-                <SelectItem value="VEHICLE">Vehicle</SelectItem>
-                <SelectItem value="WORKER">Worker</SelectItem>
-                <SelectItem value="OTHER">Other</SelectItem>
-              </SelectContent>
-            </Select>
+              required
+              value={mainCategory}
+              onChange={(v) => setMainCategory(v)}
+              options={mainCategories.map((m: any) => ({
+                value: String(m.id),
+                label: m.main_categoryName || m.name,
+              }))}
+            />
+          </div>
+
+          <div>
+            <Label>Sub Category *</Label>
+            <Select
+              required
+              disabled={!mainCategory}
+              value={subCategory}
+              onChange={(v) => setSubCategory(v)}
+              options={filteredSubCategories.map((s: any) => ({
+                value: String(s.id),
+                label: s.name,
+              }))}
+              placeholder={mainCategory ? "Select a sub category" : "Select main category first"}
+            />
           </div>
 
           <div className="md:col-span-2">
@@ -287,11 +378,9 @@ export default function ComplaintAddForm() {
             {/* PREVIEW + REMOVE BUTTONS */}
             {previewUrl && (
               <div className="flex items-center gap-3 mt-3">
-
                 {/* Preview */}
-                <Button
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={() => {
                     if (isPreviewImage) {
                       window.open(previewUrl, "_blank");
@@ -299,25 +388,35 @@ export default function ComplaintAddForm() {
                       window.open(URL.createObjectURL(file!), "_blank");
                     }
                   }}
+                  className="bg-gray-300 hover:bg-gray-200 text-white px-3 py-1 rounded text-sm"
                 >
                   Preview
-                </Button>
+                </button>
 
                 {/* Remove */}
-                <Button type="button" variant="destructive" onClick={clearFile}>
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  className="bg-red-400 hover:bg-red-300 text-white px-3 py-1 rounded text-sm"
+                >
                   Remove
-                </Button>
-
+                </button>
               </div>
             )}
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <Button type="submit">Save</Button>
-          <Button type="button" variant="destructive" onClick={() => navigate(ENC_LIST_PATH)}>
+          <button className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded border-none hover:opacity-90 disabled:opacity-60 transition-colors">
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(ENC_LIST_PATH)}
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d] transition-colors"
+          >
             Cancel
-          </Button>
+          </button>
         </div>
       </form>
     </ComponentCard>

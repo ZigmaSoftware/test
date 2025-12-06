@@ -344,20 +344,34 @@ export default function VehicleTracking(): React.ReactElement {
                 <span className="status">{vehicle.status}</span>
               </div>
               <div className="vehicle-body">
-                <p>{vehicle.name}</p>
-                <p>Speed: {vehicle.speedKmph.toFixed(0)} km/h</p>
                 <p>
-                  Ignition: {" "}
+                  <strong>Vehicle:</strong>
+                  <span>{vehicle.name}</span>
+                </p>
+                <p>
+                  <strong>Speed:</strong>
+                  <span>{vehicle.speedKmph.toFixed(0)} km/h</span>
+                </p>
+                <p>
+                  <strong>Ignition:</strong>
                   <span className={vehicle.ignition === "ON" ? "on" : "off"}>{vehicle.ignition}</span>
                 </p>
-                <p>Distance: {(vehicle.distanceKm ?? 0).toFixed(1)} km</p>
-                <p className="text-xs text-gray-500 mt-1">Updated: {vehicle.updatedAt}</p>
+                <p>
+                  <strong>Distance:</strong>
+                  <span>{(vehicle.distanceKm ?? 0).toFixed(1)} km</span>
+                </p>
+                <p style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
+                  <strong>Updated:</strong>
+                  <span>{vehicle.updatedAt}</span>
+                </p>
               </div>
             </div>
           ))}
         </div>
         {lastUpdated && (
-          <div className="px-3 py-2 text-xs text-gray-500 border-t">Last refreshed at {lastUpdated}</div>
+          <div style={{ padding: "10px 12px", fontSize: "12px", color: "#888", borderTop: "1px solid #e0e0e0", textAlign: "center" }}>
+            Last refreshed: {lastUpdated}
+          </div>
         )}
       </div>
     </div>

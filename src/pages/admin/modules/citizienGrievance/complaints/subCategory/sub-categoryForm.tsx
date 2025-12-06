@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
@@ -24,28 +24,56 @@ export default function SubComplaintCategoryForm() {
   const [mainCategory, setMainCategory] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [mainList, setMainList] = useState<any[]>([]);
+  const [loadingMain, setLoadingMain] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
+  const displayMainList = useMemo(
+    () =>
+      mainList.filter((m: any) => {
+        const key = String(m.id ?? m.unique_id);
+        const isActive = m.is_active !== false && m.is_delete !== true;
+        const isCurrent = isEdit && mainCategory && key === String(mainCategory);
+        return isActive || isCurrent;
+      }),
+    [mainList, isEdit, mainCategory]
+  );
 
   // Load dropdown
   useEffect(() => {
-    mobileAPI.get("main-category/").then(res => {
-      setMainList(res.data.data);
-    });
+    mobileAPI
+      .get("main-category/")
+      .then((res) => {
+        const data = res?.data?.data ?? res?.data ?? [];
+        setMainList(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        setMainList([]);
+        console.warn("Failed to load main categories");
+      })
+      .finally(() => {
+        setLoadingMain(false);
+      });
   }, []);
 
   // Load edit data
   useEffect(() => {
     if (isEdit) {
-      mobileAPI.get(`sub-category/${id}/`).then(res => {
-        const d = res.data.data;
-        setName(d.name);
-        setMainCategory(d.mainCategory);
-        setIsActive(d.is_active);
-      });
+      mobileAPI
+        .get(`sub-category/${id}/`)
+        .then((res) => {
+          const d = res.data?.data ?? res.data;
+          if (d) {
+            setName(d.name);
+            setMainCategory(String(d.mainCategory));
+            setIsActive(d.is_active);
+          }
+        })
+        .catch(() => {
+          Swal.fire("Error", "Failed to load sub category", "error");
+        });
     }
   }, [id, isEdit]);
 
@@ -55,7 +83,7 @@ export default function SubComplaintCategoryForm() {
 
     const payload = {
       name,
-      mainCategory,
+      mainCategory: mainCategory ? Number(mainCategory) : mainCategory,
       is_active: isActive,
     };
 
@@ -100,16 +128,21 @@ export default function SubComplaintCategoryForm() {
               Main Category <span className="text-red-500">*</span>
             </Label>
 
-            <Select value={mainCategory} onValueChange={(val) => setMainCategory(val)}>
+            <Select
+              value={mainCategory}
+              onValueChange={(val) => setMainCategory(val)}
+              disabled={loadingMain}
+            >
               <SelectTrigger className="input-validate w-full" id="mainCategory">
-                <SelectValue placeholder="Select Main Category" />
+                <SelectValue placeholder={loadingMain ? "Loading..." : "Select Main Category"} />
               </SelectTrigger>
               <SelectContent>
-                {mainList.map((m: any) => (
-                  <SelectItem key={m.unique_id} value={m.unique_id}>
-                    {m.name}
-                  </SelectItem>
-                ))}
+                {Array.isArray(displayMainList) &&
+                  displayMainList.map((m: any) => (
+                    <SelectItem key={m.id ?? m.unique_id} value={String(m.id ?? m.unique_id)}>
+                      {m.main_categoryName || m.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -136,7 +169,6 @@ export default function SubComplaintCategoryForm() {
             <Label htmlFor="isActive">
               Active Status <span className="text-red-500">*</span>
             </Label>
-
             <Select
               value={isActive ? "true" : "false"}
               onValueChange={(val) => setIsActive(val === "true")}
@@ -154,7 +186,11 @@ export default function SubComplaintCategoryForm() {
 
         {/* Buttons */}
         <div className="flex justify-end gap-3 mt-6">
-          <Button type="submit" disabled={loading}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-gradient-to-r from-[#0f5bd8] to-[#013E7E] text-white px-4 py-2 rounded border-none hover:opacity-90 disabled:opacity-60 transition-colors"
+          >
             {loading
               ? isEdit
                 ? "Updating..."
@@ -162,11 +198,15 @@ export default function SubComplaintCategoryForm() {
               : isEdit
                 ? "Update"
                 : "Save"}
-          </Button>
+          </button>
 
-          <Button type="button" variant="destructive" onClick={() => navigate(ENC_LIST_PATH)}>
+          <button
+            type="button"
+            onClick={() => navigate(ENC_LIST_PATH)}
+            className="bg-[#cc4b4b] text-white px-4 py-2 rounded border-none hover:bg-[#b43d3d] transition-colors"
+          >
             Cancel
-          </Button>
+          </button>
         </div>
       </form>
     </ComponentCard>
